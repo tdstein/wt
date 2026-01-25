@@ -3,9 +3,11 @@ package main
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/tdstein/wt/internal/agent"
 	"github.com/tdstein/wt/internal/conflict"
+	"github.com/tdstein/wt/internal/locking"
 	"github.com/tdstein/wt/internal/parse"
 	"github.com/tdstein/wt/internal/queue"
 	"github.com/tdstein/wt/internal/repo"
@@ -38,6 +40,7 @@ Setup a new repository:
 
 	cmd.AddCommand(newAgentCmd())
 	cmd.AddCommand(newQueueCmd())
+	cmd.AddCommand(newLockCmd())
 
 	return cmd
 }
@@ -683,4 +686,225 @@ func newQueueRemoveCmd() *cobra.Command {
 	}
 
 	return cmd
+}
+// ============================================================================
+// Lock Commands
+// ============================================================================
+
+func newLockCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "lock",
+		Short: "Manage task locks",
+		Long:  "Commands for claiming, releasing, and managing task locks",
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			// Find WT_TARGET_PATH by looking for .bare directory
+			targetPath, err := findWtRoot()
+			if err != nil {
+				return err
+			}
+			cmd.SetContext(withTargetPath(cmd.Context(), targetPath))
+			return nil
+		},
+	}
+
+	cmd.AddCommand(newLockClaimCmd())
+	cmd.AddCommand(newLockReleaseCmd())
+	cmd.AddCommand(newLockListCmd())
+	cmd.AddCommand(newLockCleanCmd())
+
+	return cmd
+}
+
+func newLockClaimCmd() *cobra.Command {
+	var pid int
+
+	cmd := &cobra.Command{
+		Use:   "claim <task-id> <agent-name>",
+		Short: "Claim a lock for a task",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			targetPath := getTargetPath(cmd.Context())
+			mgr := locking.NewManager(targetPath)
+
+			taskID := args[0]
+			agentName := args[1]
+
+			logInfo("Claiming lock for task: %s", taskID)
+			if err := mgr.Claim(taskID, agentName, pid); err != nil {
+				return err
+			}
+
+			logSuccess("Lock claimed: %s by %s", taskID, agentName)
+			return nil
+		},
+	}
+
+	cmd.Flags().IntVar(&pid, "pid", 0, "Process ID of the agent")
+
+	return cmd
+}
+
+func newLockReleaseCmd() *cobra.Command {
+	var force bool
+
+	cmd := &cobra.Command{
+		Use:   "release <task-id> <agent-name>",
+		Short: "Release a lock for a task",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			targetPath := getTargetPath(cmd.Context())
+			mgr := locking.NewManager(targetPath)
+
+			taskID := args[0]
+
+			if force {
+				logInfo("Force releasing lock: %s", taskID)
+				if err := mgr.ForceRelease(taskID); err != nil {
+					return err
+				}
+				logSuccess("Lock force released: %s", taskID)
+				return nil
+			}
+
+			if len(args) < 2 {
+				return fmt.Errorf("agent name is required unless --force is specified")
+			}
+
+			agentName := args[1]
+			logInfo("Releasing lock: %s", taskID)
+			if err := mgr.Release(taskID, agentName); err != nil {
+				return err
+			}
+
+			logSuccess("Lock released: %s by %s", taskID, agentName)
+			return nil
+		},
+	}
+
+	cmd.Flags().BoolVarP(&force, "force", "f", false, "Force release without agent verification")
+
+	return cmd
+}
+
+func newLockListCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List all active locks",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			targetPath := getTargetPath(cmd.Context())
+			mgr := locking.NewManager(targetPath)
+
+			locks, err := mgr.ListAll()
+			if err != nil {
+				return err
+			}
+
+			if len(locks) == 0 {
+				fmt.Println("No active locks")
+				return nil
+			}
+
+			// Print table header
+			fmt.Printf("%-20s %-15s %-20s %-10s\n",
+				"TASK", "AGENT", "CLAIMED", "PID")
+			fmt.Println(repeatString("-", 70))
+
+			// Print each lock
+			for _, lock := range locks {
+				age := time.Since(lock.ClaimedAt)
+				ageStr := formatDuration(age)
+
+				pidStr := "-"
+				if lock.PID != 0 {
+					pidStr = fmt.Sprintf("%d", lock.PID)
+				}
+
+				fmt.Printf("%-20s %-15s %-20s %-10s\n",
+					lock.TaskID, lock.AgentName, ageStr, pidStr)
+			}
+
+			fmt.Printf("\nTotal: %d lock(s)\n", len(locks))
+			return nil
+		},
+	}
+
+	return cmd
+}
+
+func newLockCleanCmd() *cobra.Command {
+	var timeout string
+	var dryRun bool
+
+	cmd := &cobra.Command{
+		Use:   "clean",
+		Short: "Clean stale locks",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			targetPath := getTargetPath(cmd.Context())
+			mgr := locking.NewManager(targetPath)
+
+			// Parse timeout
+			duration, err := time.ParseDuration(timeout)
+			if err != nil {
+				return fmt.Errorf("invalid timeout format: %w", err)
+			}
+
+			if dryRun {
+				// List stale locks without removing
+				staleLocks, err := mgr.ListStale(duration)
+				if err != nil {
+					return err
+				}
+
+				if len(staleLocks) == 0 {
+					fmt.Println("No stale locks found")
+					return nil
+				}
+
+				fmt.Printf("Found %d stale lock(s) (dry run):\n", len(staleLocks))
+				for _, lock := range staleLocks {
+					age := time.Since(lock.LastActive)
+					fmt.Printf("  - %s (agent: %s, age: %s)\n",
+						lock.TaskID, lock.AgentName, formatDuration(age))
+				}
+				return nil
+			}
+
+			// Clean stale locks
+			logInfo("Cleaning stale locks (timeout: %s)...", duration)
+			removed, err := mgr.CleanStale(duration)
+			if err != nil {
+				return err
+			}
+
+			if len(removed) == 0 {
+				fmt.Println("No stale locks found")
+				return nil
+			}
+
+			logSuccess("Removed %d stale lock(s):", len(removed))
+			for _, taskID := range removed {
+				fmt.Printf("  - %s\n", taskID)
+			}
+
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&timeout, "timeout", "1h", "Lock timeout duration (e.g., 30m, 1h, 2h)")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Show what would be cleaned without actually cleaning")
+
+	return cmd
+}
+
+func formatDuration(d time.Duration) string {
+	if d < time.Minute {
+		return fmt.Sprintf("%ds ago", int(d.Seconds()))
+	}
+	if d < time.Hour {
+		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+	}
+	if d < 24*time.Hour {
+		return fmt.Sprintf("%dh ago", int(d.Hours()))
+	}
+	return fmt.Sprintf("%dd ago", int(d.Hours()/24))
 }
