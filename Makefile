@@ -1,4 +1,4 @@
-# Makefile for wt - Git Worktree Setup Tool (Go implementation)
+# Makefile for wt - Git Worktree Setup Tool
 #
 # Standard targets:
 #   make build      - Build the wt binary
