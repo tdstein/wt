@@ -18,7 +18,7 @@ func TestNewManager(t *testing.T) {
 func TestMetadataManager_metadataDir(t *testing.T) {
 	mgr := NewMetadataManager("/home/user/wt/test-project")
 	got := mgr.metadataDir()
-	want := filepath.Join("/home/user/wt/test-project", ".bare", "worktree-metadata")
+	want := filepath.Join("/home/user/wt/test-project", ".wt", "metadata")
 	if got != want {
 		t.Errorf("metadataDir() = %q, want %q", got, want)
 	}
@@ -27,7 +27,7 @@ func TestMetadataManager_metadataDir(t *testing.T) {
 func TestMetadataManager_metadataFile(t *testing.T) {
 	mgr := NewMetadataManager("/home/user/wt/test-project")
 	got := mgr.metadataFile("alice")
-	want := filepath.Join("/home/user/wt/test-project", ".bare", "worktree-metadata", "alice.json")
+	want := filepath.Join("/home/user/wt/test-project", ".wt", "metadata", "alice.json")
 	if got != want {
 		t.Errorf("metadataFile(\"alice\") = %q, want %q", got, want)
 	}
