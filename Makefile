@@ -104,7 +104,6 @@ install: build
 	install -m 755 $(BUILD_DIR)/$(BINARY_NAME) $(DESTDIR)$(bindir)/$(BINARY_NAME)
 	@# Install documentation
 	install -m 644 README.md $(DESTDIR)$(sharedir)/doc/wt/
-	install -m 644 MIGRATION.md $(DESTDIR)$(sharedir)/doc/wt/
 	@[ -d docs ] && install -m 644 docs/*.md $(DESTDIR)$(sharedir)/doc/wt/ || true
 	@echo "Installation complete!"
 	@echo ""
