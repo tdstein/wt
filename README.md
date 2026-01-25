@@ -4,10 +4,39 @@ A CLI tool that creates bare git repository structures optimized for multiple Cl
 
 ## Installation
 
-Add `bin/wt` to your PATH or run directly:
+### System-wide Installation (Recommended)
+
+Install wt to your system using make:
+
+```bash
+# Install to /usr/local (requires sudo)
+sudo make install
+
+# Install to custom location
+make install PREFIX=/opt/local
+
+# User installation (no sudo required)
+make install PREFIX=~/.local
+```
+
+To uninstall:
+
+```bash
+sudo make uninstall
+```
+
+### Development Mode
+
+Run directly from the repository without installation:
 
 ```bash
 ./bin/wt <name>
+```
+
+Or add `bin/wt` to your PATH for the current session:
+
+```bash
+export PATH="$PATH:$(pwd)/bin"
 ```
 
 ## Usage

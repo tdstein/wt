@@ -14,8 +14,20 @@
 set -euo pipefail
 
 # Resolve script directory and load libraries
+# Support both development mode (relative paths) and installed mode (system paths)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LIB_DIR="$(cd "$SCRIPT_DIR/../lib" && pwd)"
+
+# Check if running from system installation
+if [[ -d "/usr/local/lib/wt" ]] && [[ ! -d "$SCRIPT_DIR/../lib" ]]; then
+    # System installation
+    LIB_DIR="/usr/local/lib/wt"
+elif [[ -d "$(dirname "$SCRIPT_DIR")/lib/wt" ]]; then
+    # Alternate system installation (e.g., /opt/local)
+    LIB_DIR="$(dirname "$SCRIPT_DIR")/lib/wt"
+else
+    # Development mode - use relative path
+    LIB_DIR="$(cd "$SCRIPT_DIR/../lib" && pwd)"
+fi
 
 source "$LIB_DIR/parse.sh"
 source "$LIB_DIR/repo.sh"
@@ -47,42 +59,25 @@ Usage: wt <repo-url> [name]
        wt <name>
        wt agent <command> [args...]
 
-Create a bare git repository structure for parallel worktrees.
-
 Setup Commands:
-  wt <repo-url> [name]    Clone from remote
+  wt <repo-url> [name]    Clone from remote repository
   wt <name>               Initialize local project
 
 Agent Commands:
-  wt agent create <agent-name> <task-id> [base-branch]
-                          Create agent worktree with branch task/<task-id>/<agent>
-  wt agent remove <agent-name> [--delete-branch]
-                          Remove agent worktree (optionally delete branch)
-  wt agent list           List all agent worktrees
-  wt agent check <agent-name>
-                          Check merge conflicts and divergence
-  wt agent sync <agent-name> [--auto-rebase]
-                          Sync agent worktree with base branch
+  wt agent create <name> <task-id> [base]
+  wt agent remove <name> [--delete-branch]
+  wt agent list
+  wt agent check <name>
+  wt agent sync <name> [--auto-rebase]
   wt agent prune [--older-than=Nd] [--dry-run]
-                          Remove stale worktrees (default: >7 days)
-  wt agent status         Show agent worktree dashboard
+  wt agent status
 
 Examples:
   wt https://github.com/user/repo
-  wt git@github.com:user/repo.git my-repo
   wt new-project
   wt agent create alice 1234 main
   wt agent check alice
   wt agent sync alice --auto-rebase
-  wt agent prune --older-than=14d --dry-run
-
-Structure created:
-  ~/wt/<name>/
-  ├── .bare/                  # Shared git objects
-  │   └── worktree-metadata/  # Agent metadata
-  ├── .git                    # Pointer to .bare
-  ├── main/                   # Primary worktree
-  └── <agent-name>/           # Agent worktrees
 EOF
 }
 

@@ -35,8 +35,6 @@ wt_parse_args() {
 
     if [[ -z "$arg1" ]]; then
         echo "Error: No arguments provided" >&2
-        echo "Usage: wt <repo-url> [name]" >&2
-        echo "       wt <name>" >&2
         return 1
     fi
 
