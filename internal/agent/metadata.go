@@ -9,15 +9,30 @@ import (
 	"time"
 )
 
+// Checkpoint represents a saved state in the agent's work
+type Checkpoint struct {
+	Name      string    `json:"name"`
+	Commit    string    `json:"commit"`
+	Timestamp time.Time `json:"timestamp"`
+}
+
 // Metadata represents the JSON metadata for a worktree agent
 type Metadata struct {
-	Agent        string    `json:"agent"`
-	TaskID       string    `json:"task_id"`
-	Branch       string    `json:"branch"`
-	BaseBranch   string    `json:"base_branch"`
-	Created      time.Time `json:"created"`
-	LastActivity time.Time `json:"last_activity"`
-	Status       string    `json:"status"`
+	Agent        string       `json:"agent"`
+	TaskID       string       `json:"task_id"`
+	Branch       string       `json:"branch"`
+	BaseBranch   string       `json:"base_branch"`
+	Created      time.Time    `json:"created"`
+	LastActivity time.Time    `json:"last_activity"`
+	Status       string       `json:"status"`
+
+	// Enhanced fields (backwards compatible with omitempty)
+	Progress     int          `json:"progress,omitempty"`      // 0-100 percentage
+	State        string       `json:"state,omitempty"`         // claimed, working, testing, blocked, failed, completed
+	ErrorMessage string       `json:"error_message,omitempty"` // Error details if failed
+	PID          int          `json:"pid,omitempty"`           // Process ID for health monitoring
+	LogFile      string       `json:"log_file,omitempty"`      // Path to agent's work log
+	Checkpoints  []Checkpoint `json:"checkpoints,omitempty"`   // Saved states for rollback
 }
 
 // MetadataManager handles metadata operations for a worktree
@@ -218,4 +233,133 @@ func AgeHuman(ageSeconds int64) string {
 		days := ageSeconds / day
 		return fmt.Sprintf("%dd", days)
 	}
+}
+
+// save is a helper method to save metadata to disk
+func (m *MetadataManager) save(metadata *Metadata) error {
+	data, err := json.MarshalIndent(metadata, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal metadata: %w", err)
+	}
+
+	metadataFile := m.metadataFile(metadata.Agent)
+	if err := os.WriteFile(metadataFile, data, 0644); err != nil {
+		return fmt.Errorf("failed to write metadata file: %w", err)
+	}
+
+	return nil
+}
+
+// UpdateProgress updates the progress percentage for an agent
+func (m *MetadataManager) UpdateProgress(agent string, progress int) error {
+	if progress < 0 || progress > 100 {
+		return fmt.Errorf("progress must be between 0 and 100")
+	}
+
+	metadata, err := m.Get(agent)
+	if err != nil {
+		return err
+	}
+
+	metadata.Progress = progress
+	metadata.LastActivity = time.Now().UTC()
+
+	return m.save(metadata)
+}
+
+// UpdateState updates the state for an agent
+func (m *MetadataManager) UpdateState(agent, state string) error {
+	validStates := map[string]bool{
+		"claimed":   true,
+		"working":   true,
+		"testing":   true,
+		"blocked":   true,
+		"failed":    true,
+		"completed": true,
+	}
+
+	if !validStates[state] {
+		return fmt.Errorf("invalid state: %s (must be one of: claimed, working, testing, blocked, failed, completed)", state)
+	}
+
+	metadata, err := m.Get(agent)
+	if err != nil {
+		return err
+	}
+
+	metadata.State = state
+	metadata.LastActivity = time.Now().UTC()
+
+	return m.save(metadata)
+}
+
+// SetError sets an error message for an agent
+func (m *MetadataManager) SetError(agent, errorMsg string) error {
+	metadata, err := m.Get(agent)
+	if err != nil {
+		return err
+	}
+
+	metadata.ErrorMessage = errorMsg
+	metadata.State = "failed"
+	metadata.LastActivity = time.Now().UTC()
+
+	return m.save(metadata)
+}
+
+// SetPID sets the process ID for an agent
+func (m *MetadataManager) SetPID(agent string, pid int) error {
+	if pid < 0 {
+		return fmt.Errorf("PID must be non-negative")
+	}
+
+	metadata, err := m.Get(agent)
+	if err != nil {
+		return err
+	}
+
+	metadata.PID = pid
+	metadata.LastActivity = time.Now().UTC()
+
+	return m.save(metadata)
+}
+
+// AddCheckpoint adds a checkpoint to an agent's metadata
+func (m *MetadataManager) AddCheckpoint(agent, name, commit string) error {
+	if name == "" {
+		return fmt.Errorf("checkpoint name is required")
+	}
+	if commit == "" {
+		return fmt.Errorf("checkpoint commit is required")
+	}
+
+	metadata, err := m.Get(agent)
+	if err != nil {
+		return err
+	}
+
+	checkpoint := Checkpoint{
+		Name:      name,
+		Commit:    commit,
+		Timestamp: time.Now().UTC(),
+	}
+
+	metadata.Checkpoints = append(metadata.Checkpoints, checkpoint)
+	metadata.LastActivity = time.Now().UTC()
+
+	return m.save(metadata)
+}
+
+// GetCheckpoints retrieves all checkpoints for an agent
+func (m *MetadataManager) GetCheckpoints(agent string) ([]Checkpoint, error) {
+	metadata, err := m.Get(agent)
+	if err != nil {
+		return nil, err
+	}
+
+	if metadata.Checkpoints == nil {
+		return []Checkpoint{}, nil
+	}
+
+	return metadata.Checkpoints, nil
 }
