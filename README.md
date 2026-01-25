@@ -186,26 +186,36 @@ git worktree remove agent-charlie
 ## Running Tests
 
 ```bash
-./tests/test-runner.sh
+# Run all tests
+make test
+
+# Or use go test directly
+go test ./...
+
+# Run with coverage
+make test-coverage
 ```
 
 ## Project Structure
 
 ```
 wt/
-├── bin/wt                  # Main CLI executable
-├── lib/
-│   ├── parse.sh            # Argument parsing
-│   ├── repo.sh             # Repository operations
-│   ├── agent.sh            # Agent worktree management
-│   ├── metadata.sh         # JSON metadata tracking
-│   └── conflict.sh         # Conflict detection and sync
-└── tests/
-    ├── test-runner.sh      # Test framework
-    ├── test-integration.sh # End-to-end tests
-    ├── test-local.sh       # Local setup tests
-    ├── test-parse.sh       # Parsing tests
-    ├── test-agent.sh       # Agent management tests
-    ├── test-metadata.sh    # Metadata library tests
-    └── test-conflict.sh    # Conflict detection tests
+├── bin/wt                  # Compiled Go binary
+├── cmd/wt/                 # CLI entry point
+│   ├── main.go             # Command definitions
+│   ├── utils.go            # Logging and helpers
+│   └── main_test.go        # CLI integration tests
+├── internal/               # Internal packages
+│   ├── parse/              # URL and argument parsing
+│   ├── git/                # Git command wrapper
+│   ├── repo/               # Repository operations
+│   ├── agent/              # Agent management
+│   │   ├── agent.go        # Agent operations
+│   │   ├── metadata.go     # Metadata management
+│   │   ├── agent_test.go   # Agent tests
+│   │   └── metadata_test.go # Metadata tests
+│   └── conflict/           # Conflict detection
+├── go.mod                  # Go module definition
+├── go.sum                  # Dependency checksums
+└── Makefile                # Build and install targets
 ```
