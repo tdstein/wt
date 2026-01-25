@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/tdstein/wt/internal/git"
-	"github.com/tdstein/wt/internal/migrate"
 )
 
 // Manager handles repository operations
@@ -190,12 +189,6 @@ func (m *Manager) SetupLocal() error {
 		return fmt.Errorf("failed to ensure .wt state directory: %w", err)
 	}
 
-	if migrate.IsMigrationNeeded(m.targetPath) {
-		if err := migrate.MigrateStateFromBareToWt(m.targetPath); err != nil {
-			return fmt.Errorf("failed to migrate state from .bare to .wt: %w", err)
-		}
-	}
-
 	if err := m.CreateLocalWorktree(); err != nil {
 		return fmt.Errorf("failed to create worktree: %w", err)
 	}
@@ -219,12 +212,6 @@ func (m *Manager) SetupRemote() error {
 
 	if err := m.EnsureWtStateDir(); err != nil {
 		return fmt.Errorf("failed to ensure .wt state directory: %w", err)
-	}
-
-	if migrate.IsMigrationNeeded(m.targetPath) {
-		if err := migrate.MigrateStateFromBareToWt(m.targetPath); err != nil {
-			return fmt.Errorf("failed to migrate state from .bare to .wt: %w", err)
-		}
 	}
 
 	defaultBranch, err := m.GetRemoteDefaultBranch()
