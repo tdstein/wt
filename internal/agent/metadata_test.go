@@ -378,3 +378,327 @@ func TestAgeHuman(t *testing.T) {
 		})
 	}
 }
+
+// ============================================================================
+// Enhanced Metadata Tests
+// ============================================================================
+
+func TestMetadataManager_UpdateProgress(t *testing.T) {
+	mgr, tempDir := setupTestManager(t)
+	defer cleanupTestManager(t, tempDir)
+
+	// Create metadata
+	err := mgr.Create("alice", "1234", "task/1234/alice", "main")
+	if err != nil {
+		t.Fatalf("Create() failed: %v", err)
+	}
+
+	// Update progress
+	err = mgr.UpdateProgress("alice", 50)
+	if err != nil {
+		t.Fatalf("UpdateProgress() failed: %v", err)
+	}
+
+	// Verify progress was updated
+	metadata, err := mgr.Get("alice")
+	if err != nil {
+		t.Fatalf("Get() failed: %v", err)
+	}
+
+	if metadata.Progress != 50 {
+		t.Errorf("Progress = %d, want 50", metadata.Progress)
+	}
+
+	// Test invalid progress values
+	tests := []struct {
+		name     string
+		progress int
+		wantErr  bool
+	}{
+		{"valid 0", 0, false},
+		{"valid 100", 100, false},
+		{"valid 50", 50, false},
+		{"invalid -1", -1, true},
+		{"invalid 101", 101, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := mgr.UpdateProgress("alice", tt.progress)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("UpdateProgress(%d) error = %v, wantErr %v", tt.progress, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestMetadataManager_UpdateState(t *testing.T) {
+	mgr, tempDir := setupTestManager(t)
+	defer cleanupTestManager(t, tempDir)
+
+	// Create metadata
+	err := mgr.Create("bob", "5678", "task/5678/bob", "main")
+	if err != nil {
+		t.Fatalf("Create() failed: %v", err)
+	}
+
+	validStates := []string{"claimed", "working", "testing", "blocked", "failed", "completed"}
+
+	// Test all valid states
+	for _, state := range validStates {
+		t.Run("valid_"+state, func(t *testing.T) {
+			err := mgr.UpdateState("bob", state)
+			if err != nil {
+				t.Errorf("UpdateState(%q) failed: %v", state, err)
+			}
+
+			metadata, err := mgr.Get("bob")
+			if err != nil {
+				t.Fatalf("Get() failed: %v", err)
+			}
+
+			if metadata.State != state {
+				t.Errorf("State = %q, want %q", metadata.State, state)
+			}
+		})
+	}
+
+	// Test invalid state
+	err = mgr.UpdateState("bob", "invalid")
+	if err == nil {
+		t.Error("UpdateState() with invalid state should fail")
+	}
+}
+
+func TestMetadataManager_SetError(t *testing.T) {
+	mgr, tempDir := setupTestManager(t)
+	defer cleanupTestManager(t, tempDir)
+
+	// Create metadata
+	err := mgr.Create("charlie", "9999", "task/9999/charlie", "main")
+	if err != nil {
+		t.Fatalf("Create() failed: %v", err)
+	}
+
+	// Set error
+	errorMsg := "Test error: something went wrong"
+	err = mgr.SetError("charlie", errorMsg)
+	if err != nil {
+		t.Fatalf("SetError() failed: %v", err)
+	}
+
+	// Verify error was set
+	metadata, err := mgr.Get("charlie")
+	if err != nil {
+		t.Fatalf("Get() failed: %v", err)
+	}
+
+	if metadata.ErrorMessage != errorMsg {
+		t.Errorf("ErrorMessage = %q, want %q", metadata.ErrorMessage, errorMsg)
+	}
+
+	// State should be set to "failed"
+	if metadata.State != "failed" {
+		t.Errorf("State = %q, want \"failed\"", metadata.State)
+	}
+}
+
+func TestMetadataManager_SetPID(t *testing.T) {
+	mgr, tempDir := setupTestManager(t)
+	defer cleanupTestManager(t, tempDir)
+
+	// Create metadata
+	err := mgr.Create("david", "1111", "task/1111/david", "main")
+	if err != nil {
+		t.Fatalf("Create() failed: %v", err)
+	}
+
+	// Set PID
+	pid := 12345
+	err = mgr.SetPID("david", pid)
+	if err != nil {
+		t.Fatalf("SetPID() failed: %v", err)
+	}
+
+	// Verify PID was set
+	metadata, err := mgr.Get("david")
+	if err != nil {
+		t.Fatalf("Get() failed: %v", err)
+	}
+
+	if metadata.PID != pid {
+		t.Errorf("PID = %d, want %d", metadata.PID, pid)
+	}
+
+	// Test negative PID
+	err = mgr.SetPID("david", -1)
+	if err == nil {
+		t.Error("SetPID() with negative PID should fail")
+	}
+}
+
+func TestMetadataManager_AddCheckpoint(t *testing.T) {
+	mgr, tempDir := setupTestManager(t)
+	defer cleanupTestManager(t, tempDir)
+
+	// Create metadata
+	err := mgr.Create("emily", "2222", "task/2222/emily", "main")
+	if err != nil {
+		t.Fatalf("Create() failed: %v", err)
+	}
+
+	// Add first checkpoint
+	err = mgr.AddCheckpoint("emily", "checkpoint-1", "abc123")
+	if err != nil {
+		t.Fatalf("AddCheckpoint() failed: %v", err)
+	}
+
+	// Verify checkpoint was added
+	checkpoints, err := mgr.GetCheckpoints("emily")
+	if err != nil {
+		t.Fatalf("GetCheckpoints() failed: %v", err)
+	}
+
+	if len(checkpoints) != 1 {
+		t.Fatalf("GetCheckpoints() returned %d checkpoints, want 1", len(checkpoints))
+	}
+
+	if checkpoints[0].Name != "checkpoint-1" {
+		t.Errorf("Checkpoint name = %q, want \"checkpoint-1\"", checkpoints[0].Name)
+	}
+	if checkpoints[0].Commit != "abc123" {
+		t.Errorf("Checkpoint commit = %q, want \"abc123\"", checkpoints[0].Commit)
+	}
+	if checkpoints[0].Timestamp.IsZero() {
+		t.Error("Checkpoint timestamp is zero")
+	}
+
+	// Add second checkpoint
+	err = mgr.AddCheckpoint("emily", "checkpoint-2", "def456")
+	if err != nil {
+		t.Fatalf("AddCheckpoint() failed: %v", err)
+	}
+
+	// Verify both checkpoints exist
+	checkpoints, err = mgr.GetCheckpoints("emily")
+	if err != nil {
+		t.Fatalf("GetCheckpoints() failed: %v", err)
+	}
+
+	if len(checkpoints) != 2 {
+		t.Fatalf("GetCheckpoints() returned %d checkpoints, want 2", len(checkpoints))
+	}
+
+	// Test validation
+	err = mgr.AddCheckpoint("emily", "", "abc123")
+	if err == nil {
+		t.Error("AddCheckpoint() with empty name should fail")
+	}
+
+	err = mgr.AddCheckpoint("emily", "checkpoint-3", "")
+	if err == nil {
+		t.Error("AddCheckpoint() with empty commit should fail")
+	}
+}
+
+func TestMetadataManager_GetCheckpoints(t *testing.T) {
+	mgr, tempDir := setupTestManager(t)
+	defer cleanupTestManager(t, tempDir)
+
+	// Create metadata
+	err := mgr.Create("frank", "3333", "task/3333/frank", "main")
+	if err != nil {
+		t.Fatalf("Create() failed: %v", err)
+	}
+
+	// GetCheckpoints on fresh metadata should return empty slice
+	checkpoints, err := mgr.GetCheckpoints("frank")
+	if err != nil {
+		t.Fatalf("GetCheckpoints() failed: %v", err)
+	}
+
+	if len(checkpoints) != 0 {
+		t.Errorf("GetCheckpoints() returned %d checkpoints, want 0", len(checkpoints))
+	}
+
+	// GetCheckpoints on nonexistent agent should error
+	_, err = mgr.GetCheckpoints("nonexistent")
+	if err == nil {
+		t.Error("GetCheckpoints() on nonexistent agent should fail")
+	}
+}
+
+func TestMetadataBackwardsCompatibility(t *testing.T) {
+	mgr, tempDir := setupTestManager(t)
+	defer cleanupTestManager(t, tempDir)
+
+	// Create old-style metadata (without enhanced fields)
+	oldMetadata := `{
+  "agent": "grace",
+  "task_id": "4444",
+  "branch": "task/4444/grace",
+  "base_branch": "main",
+  "created": "2024-01-01T00:00:00Z",
+  "last_activity": "2024-01-01T00:00:00Z",
+  "status": "active"
+}`
+
+	// Write old-style metadata file
+	if err := mgr.Init(); err != nil {
+		t.Fatalf("Init() failed: %v", err)
+	}
+
+	metadataFile := mgr.metadataFile("grace")
+	if err := os.WriteFile(metadataFile, []byte(oldMetadata), 0644); err != nil {
+		t.Fatalf("Failed to write old metadata: %v", err)
+	}
+
+	// Try to read old metadata
+	metadata, err := mgr.Get("grace")
+	if err != nil {
+		t.Fatalf("Get() failed on old metadata: %v", err)
+	}
+
+	// Verify basic fields
+	if metadata.Agent != "grace" {
+		t.Errorf("Agent = %q, want \"grace\"", metadata.Agent)
+	}
+	if metadata.TaskID != "4444" {
+		t.Errorf("TaskID = %q, want \"4444\"", metadata.TaskID)
+	}
+
+	// Verify enhanced fields have zero values (backwards compatible)
+	if metadata.Progress != 0 {
+		t.Errorf("Progress = %d, want 0", metadata.Progress)
+	}
+	if metadata.State != "" {
+		t.Errorf("State = %q, want empty string", metadata.State)
+	}
+	if metadata.ErrorMessage != "" {
+		t.Errorf("ErrorMessage = %q, want empty string", metadata.ErrorMessage)
+	}
+	if metadata.PID != 0 {
+		t.Errorf("PID = %d, want 0", metadata.PID)
+	}
+	if metadata.LogFile != "" {
+		t.Errorf("LogFile = %q, want empty string", metadata.LogFile)
+	}
+	if len(metadata.Checkpoints) != 0 {
+		t.Errorf("Checkpoints length = %d, want 0", len(metadata.Checkpoints))
+	}
+
+	// Verify we can update old metadata with new fields
+	err = mgr.UpdateProgress("grace", 25)
+	if err != nil {
+		t.Fatalf("UpdateProgress() failed on old metadata: %v", err)
+	}
+
+	metadata, err = mgr.Get("grace")
+	if err != nil {
+		t.Fatalf("Get() failed after update: %v", err)
+	}
+
+	if metadata.Progress != 25 {
+		t.Errorf("Progress = %d, want 25", metadata.Progress)
+	}
+}
