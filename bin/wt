@@ -1,0 +1,158 @@
+#!/usr/bin/env bash
+#
+# wt - Git worktree setup for parallel Claude Code agents
+#
+# Creates a bare git repository structure optimized for multiple
+# agents working in parallel worktrees.
+#
+# Usage:
+#   wt <repo-url>           Clone from remote
+#   wt <repo-url> <name>    Clone from remote with custom name
+#   wt <name>               Initialize local project
+#
+
+set -euo pipefail
+
+# Resolve script directory and load libraries
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LIB_DIR="$(cd "$SCRIPT_DIR/../lib" && pwd)"
+
+source "$LIB_DIR/parse.sh"
+source "$LIB_DIR/repo.sh"
+
+# Colors for output (disabled if not a terminal)
+if [[ -t 1 ]]; then
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[0;33m'
+    BLUE='\033[0;34m'
+    NC='\033[0m' # No Color
+else
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    NC=''
+fi
+
+log_info() { echo -e "${BLUE}[INFO]${NC} $*"; }
+log_success() { echo -e "${GREEN}[OK]${NC} $*"; }
+log_warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
+log_error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
+
+usage() {
+    cat <<EOF
+Usage: wt <repo-url> [name]
+       wt <name>
+
+Create a bare git repository structure for parallel worktrees.
+
+Arguments:
+  <repo-url>    Clone from remote (https:// or git@)
+  <name>        Directory name (derived from URL if not specified)
+
+Examples:
+  wt https://github.com/user/repo
+  wt git@github.com:user/repo.git my-repo
+  wt new-project
+
+Structure created:
+  ~/wt/<name>/
+  ├── .bare/    # Shared git objects
+  ├── .git      # Pointer to .bare
+  └── main/     # Primary worktree
+EOF
+}
+
+confirm_remove() {
+    local path="$1"
+    echo -e "${YELLOW}Directory exists: $path${NC}"
+    read -p "Remove and recreate? [y/N] " -n 1 -r
+    echo
+    [[ $REPLY =~ ^[Yy]$ ]]
+}
+
+check_git_available() {
+    if ! command -v git >/dev/null 2>&1; then
+        log_error "git is not installed"
+        echo "Please install git to use wt"
+        exit 1
+    fi
+}
+
+check_git_config() {
+    local git_user git_email
+    git_user="$(git config --global user.name 2>/dev/null || true)"
+    git_email="$(git config --global user.email 2>/dev/null || true)"
+
+    if [[ -z "$git_user" ]] || [[ -z "$git_email" ]]; then
+        log_error "git user configuration is missing"
+        echo "Please configure git with:"
+        echo "  git config --global user.name \"Your Name\""
+        echo "  git config --global user.email \"your@email.com\""
+        exit 1
+    fi
+}
+
+main() {
+    # Check prerequisites
+    check_git_available
+    check_git_config
+
+    # Parse arguments
+    if ! wt_parse_args "$@"; then
+        usage
+        exit 1
+    fi
+
+    log_info "Mode: $WT_MODE"
+    log_info "Target: $WT_TARGET_PATH"
+
+    # Check if target exists
+    if wt_target_exists; then
+        if [[ -t 0 ]]; then
+            # Interactive - ask for confirmation
+            if ! confirm_remove "$WT_TARGET_PATH"; then
+                log_warn "Aborted"
+                exit 0
+            fi
+        else
+            # Non-interactive - fail
+            log_error "Target exists: $WT_TARGET_PATH"
+            exit 1
+        fi
+        wt_remove_target
+    fi
+
+    # Setup based on mode
+    if [[ "$WT_MODE" == "local" ]]; then
+        log_info "Initializing local repository..."
+        if ! wt_setup_local; then
+            log_error "Failed to setup local repository"
+            exit 1
+        fi
+    else
+        log_info "Cloning from $WT_REPO_URL..."
+        if ! wt_setup_remote; then
+            log_error "Failed to clone repository"
+            exit 1
+        fi
+    fi
+
+    # Report success
+    echo
+    log_success "Worktree ready: $WT_TARGET_PATH"
+    echo
+    wt_list_worktrees
+    echo
+    wt_get_sizes
+    echo
+    echo "Add agent worktree:"
+    echo "  cd $WT_TARGET_PATH"
+    echo "  git worktree add <agent-name> -b <branch> main"
+}
+
+# Run main if not being sourced
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi
