@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/tdstein/wt/internal/git"
+	"github.com/tdstein/wt/internal/migrate"
 )
 
 // Manager handles repository operations
@@ -152,6 +153,25 @@ func (m *Manager) GetSizes() (string, error) {
 	return string(output), nil
 }
 
+// wtStateDir returns the path to the .wt state directory
+func (m *Manager) wtStateDir() string {
+	return filepath.Join(m.targetPath, ".wt")
+}
+
+// EnsureWtStateDir ensures the .wt state directory and subdirectories exist
+func (m *Manager) EnsureWtStateDir() error {
+	subdirs := []string{"metadata", "queue", "locks"}
+
+	for _, subdir := range subdirs {
+		dir := filepath.Join(m.wtStateDir(), subdir)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return fmt.Errorf("failed to create .wt directory structure: %w", err)
+		}
+	}
+
+	return nil
+}
+
 // SetupLocal performs full setup for a local project
 func (m *Manager) SetupLocal() error {
 	if err := m.CreateTarget(); err != nil {
@@ -164,6 +184,16 @@ func (m *Manager) SetupLocal() error {
 
 	if err := m.CreateGitPointer(); err != nil {
 		return fmt.Errorf("failed to create git pointer: %w", err)
+	}
+
+	if err := m.EnsureWtStateDir(); err != nil {
+		return fmt.Errorf("failed to ensure .wt state directory: %w", err)
+	}
+
+	if migrate.IsMigrationNeeded(m.targetPath) {
+		if err := migrate.MigrateStateFromBareToWt(m.targetPath); err != nil {
+			return fmt.Errorf("failed to migrate state from .bare to .wt: %w", err)
+		}
 	}
 
 	if err := m.CreateLocalWorktree(); err != nil {
@@ -185,6 +215,16 @@ func (m *Manager) SetupRemote() error {
 
 	if err := m.CreateGitPointer(); err != nil {
 		return fmt.Errorf("failed to create git pointer: %w", err)
+	}
+
+	if err := m.EnsureWtStateDir(); err != nil {
+		return fmt.Errorf("failed to ensure .wt state directory: %w", err)
+	}
+
+	if migrate.IsMigrationNeeded(m.targetPath) {
+		if err := migrate.MigrateStateFromBareToWt(m.targetPath); err != nil {
+			return fmt.Errorf("failed to migrate state from .bare to .wt: %w", err)
+		}
 	}
 
 	defaultBranch, err := m.GetRemoteDefaultBranch()
