@@ -7,6 +7,7 @@ import (
 	"github.com/tdstein/wt/internal/agent"
 	"github.com/tdstein/wt/internal/conflict"
 	"github.com/tdstein/wt/internal/parse"
+	"github.com/tdstein/wt/internal/queue"
 	"github.com/tdstein/wt/internal/repo"
 	"github.com/spf13/cobra"
 )
@@ -36,6 +37,7 @@ Setup a new repository:
 	}
 
 	cmd.AddCommand(newAgentCmd())
+	cmd.AddCommand(newQueueCmd())
 
 	return cmd
 }
@@ -437,6 +439,245 @@ func newAgentStatusCmd() *cobra.Command {
 					a.Agent, a.TaskID, a.AgeHuman, statusColor, a.Status, colorReset)
 			}
 
+			return nil
+		},
+	}
+
+	return cmd
+}
+
+// ============================================================================
+// Queue Commands
+// ============================================================================
+
+func newQueueCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "queue",
+		Short: "Manage task queue",
+		Long:  "Commands for managing the task queue",
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			// Find WT_TARGET_PATH by looking for .bare directory
+			targetPath, err := findWtRoot()
+			if err != nil {
+				return err
+			}
+			cmd.SetContext(withTargetPath(cmd.Context(), targetPath))
+			return nil
+		},
+	}
+
+	cmd.AddCommand(newQueueAddCmd())
+	cmd.AddCommand(newQueueListCmd())
+	cmd.AddCommand(newQueueGetCmd())
+	cmd.AddCommand(newQueueRemoveCmd())
+
+	return cmd
+}
+
+func newQueueAddCmd() *cobra.Command {
+	var priority string
+	var description string
+	var dependencies []string
+	var mergeAfter []string
+	var baseBranch string
+	var tags []string
+
+	cmd := &cobra.Command{
+		Use:   "add <task-id>",
+		Short: "Add a new task to the queue",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			targetPath := getTargetPath(cmd.Context())
+			mgr := queue.NewManager(targetPath)
+
+			taskID := args[0]
+
+			// Parse priority
+			var p queue.Priority
+			switch priority {
+			case "high":
+				p = queue.PriorityHigh
+			case "normal":
+				p = queue.PriorityNormal
+			case "low":
+				p = queue.PriorityLow
+			default:
+				return fmt.Errorf("invalid priority: %s (must be high, normal, or low)", priority)
+			}
+
+			opts := queue.AddOptions{
+				TaskID:       taskID,
+				Description:  description,
+				Priority:     p,
+				Dependencies: dependencies,
+				MergeAfter:   mergeAfter,
+				BaseBranch:   baseBranch,
+				Tags:         tags,
+			}
+
+			logInfo("Adding task to queue: %s", taskID)
+			if err := mgr.Add(opts); err != nil {
+				return err
+			}
+
+			logSuccess("Task added: %s", taskID)
+			fmt.Printf("Priority: %s\n", priority)
+			if len(dependencies) > 0 {
+				fmt.Printf("Dependencies: %v\n", dependencies)
+			}
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&priority, "priority", "normal", "Task priority (high, normal, low)")
+	cmd.Flags().StringVar(&description, "description", "", "Task description")
+	cmd.Flags().StringSliceVar(&dependencies, "depends-on", []string{}, "Task dependencies (comma-separated)")
+	cmd.Flags().StringSliceVar(&mergeAfter, "merge-after", []string{}, "Tasks to merge after (comma-separated)")
+	cmd.Flags().StringVar(&baseBranch, "base-branch", "main", "Base branch")
+	cmd.Flags().StringSliceVar(&tags, "tags", []string{}, "Task tags (comma-separated)")
+
+	return cmd
+}
+
+func newQueueListCmd() *cobra.Command {
+	var stateFilter string
+
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List tasks in the queue",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			targetPath := getTargetPath(cmd.Context())
+			mgr := queue.NewManager(targetPath)
+
+			// Parse state filter
+			var state queue.State
+			if stateFilter != "" {
+				switch stateFilter {
+				case "pending":
+					state = queue.StatePending
+				case "claimed":
+					state = queue.StateClaimed
+				case "completed":
+					state = queue.StateCompleted
+				case "failed":
+					state = queue.StateFailed
+				default:
+					return fmt.Errorf("invalid state: %s", stateFilter)
+				}
+			}
+
+			tasks, err := mgr.List(state)
+			if err != nil {
+				return err
+			}
+
+			if len(tasks) == 0 {
+				fmt.Println("No tasks found")
+				return nil
+			}
+
+			// Print table header
+			fmt.Printf("%-15s %-20s %-10s %-10s %-15s\n",
+				"TASK", "DESCRIPTION", "PRIORITY", "STATE", "CLAIMED BY")
+			fmt.Println(repeatString("-", 80))
+
+			// Print tasks
+			for _, task := range tasks {
+				desc := task.Description
+				if len(desc) > 20 {
+					desc = desc[:17] + "..."
+				}
+
+				stateColor := ""
+				switch task.State {
+				case queue.StatePending:
+					stateColor = colorYellow
+				case queue.StateClaimed:
+					stateColor = colorBlue
+				case queue.StateCompleted:
+					stateColor = colorGreen
+				case queue.StateFailed:
+					stateColor = colorRed
+				}
+
+				fmt.Printf("%-15s %-20s %-10s %s%-10s%s %-15s\n",
+					task.TaskID, desc, task.Priority, stateColor, task.State, colorReset, task.ClaimedBy)
+			}
+
+			fmt.Printf("\nTotal: %d task(s)\n", len(tasks))
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&stateFilter, "state", "", "Filter by state (pending, claimed, completed, failed)")
+
+	return cmd
+}
+
+func newQueueGetCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "get <task-id>",
+		Short: "Get detailed information about a task",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			targetPath := getTargetPath(cmd.Context())
+			mgr := queue.NewManager(targetPath)
+
+			taskID := args[0]
+			task, err := mgr.Get(taskID)
+			if err != nil {
+				return err
+			}
+
+			// Print task details
+			fmt.Printf("Task ID:      %s\n", task.TaskID)
+			fmt.Printf("Description:  %s\n", task.Description)
+			fmt.Printf("Priority:     %s\n", task.Priority)
+			fmt.Printf("State:        %s\n", task.State)
+			fmt.Printf("Base Branch:  %s\n", task.BaseBranch)
+			fmt.Printf("Created:      %s\n", task.Created.Format("2006-01-02 15:04:05"))
+
+			if len(task.Dependencies) > 0 {
+				fmt.Printf("Dependencies: %v\n", task.Dependencies)
+			}
+
+			if len(task.MergeAfter) > 0 {
+				fmt.Printf("Merge After:  %v\n", task.MergeAfter)
+			}
+
+			if len(task.Tags) > 0 {
+				fmt.Printf("Tags:         %v\n", task.Tags)
+			}
+
+			if task.ClaimedBy != "" {
+				fmt.Printf("Claimed By:   %s\n", task.ClaimedBy)
+				fmt.Printf("Claimed At:   %s\n", task.ClaimedAt.Format("2006-01-02 15:04:05"))
+			}
+
+			return nil
+		},
+	}
+
+	return cmd
+}
+
+func newQueueRemoveCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "remove <task-id>",
+		Short: "Remove a task from the queue",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			targetPath := getTargetPath(cmd.Context())
+			mgr := queue.NewManager(targetPath)
+
+			taskID := args[0]
+
+			logInfo("Removing task: %s", taskID)
+			if err := mgr.Remove(taskID); err != nil {
+				return err
+			}
+
+			logSuccess("Task removed: %s", taskID)
 			return nil
 		},
 	}
