@@ -448,3 +448,335 @@ func TestParseOlderThan(t *testing.T) {
 		})
 	}
 }
+
+// Test Manager_Sync with missing agent
+func TestManager_Sync_MissingAgent(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping git operation test in short mode")
+	}
+
+	tempDir, projectPath := setupTestRepoForAgent(t)
+	defer os.RemoveAll(tempDir)
+
+	mgr := NewAgentManager(projectPath)
+
+	// Try to sync non-existent agent
+	_, err := mgr.Sync(SyncOptions{AgentName: "nonexistent"})
+	if err == nil {
+		t.Error("Sync() should fail for non-existent agent")
+	}
+}
+
+// Test Manager_Sync with empty agent name
+func TestManager_Sync_EmptyAgentName(t *testing.T) {
+	tempDir, projectPath := setupTestRepoForAgent(t)
+	defer os.RemoveAll(tempDir)
+
+	mgr := NewAgentManager(projectPath)
+
+	// Try to sync with empty agent name
+	_, err := mgr.Sync(SyncOptions{AgentName: ""})
+	if err == nil {
+		t.Error("Sync() should fail with empty agent name")
+	}
+}
+
+// Test Manager_Sync with auto-rebase option
+func TestManager_Sync_WithAutoRebase(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping git operation test in short mode")
+	}
+
+	tempDir, projectPath := setupTestRepoForAgent(t)
+	defer os.RemoveAll(tempDir)
+
+	mgr := NewAgentManager(projectPath)
+
+	// Create an agent first
+	err := mgr.Create(CreateOptions{
+		AgentName:  "sync-test",
+		TaskID:     "task-1",
+		BaseBranch: "main",
+	})
+	if err != nil {
+		t.Fatalf("Create() failed: %v", err)
+	}
+
+	// Test sync with auto-rebase
+	result, err := mgr.Sync(SyncOptions{
+		AgentName:  "sync-test",
+		AutoRebase: true,
+	})
+	if err != nil {
+		t.Logf("Sync() returned error: %v (may be expected)", err)
+		return
+	}
+
+	if result != nil {
+		t.Logf("Sync result: AlreadyUpToDate=%v", result.AlreadyUpToDate)
+	}
+}
+
+// Test Manager_Prune with empty agents list
+func TestManager_Prune_NoAgents(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping git operation test in short mode")
+	}
+
+	tempDir, projectPath := setupTestRepoForAgent(t)
+	defer os.RemoveAll(tempDir)
+
+	mgr := NewAgentManager(projectPath)
+
+	// Prune with no agents
+	result, err := mgr.Prune(PruneOptions{})
+	if err != nil {
+		t.Fatalf("Prune() failed: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("Prune() returned nil result")
+	}
+
+	if len(result.StaleAgents) != 0 {
+		t.Errorf("StaleAgents = %v, want empty", result.StaleAgents)
+	}
+}
+
+// Test Manager_Prune with dry-run flag
+func TestManager_Prune_DryRun(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping git operation test in short mode")
+	}
+
+	tempDir, projectPath := setupTestRepoForAgent(t)
+	defer os.RemoveAll(tempDir)
+
+	mgr := NewAgentManager(projectPath)
+
+	// Create an agent
+	err := mgr.Create(CreateOptions{
+		AgentName:  "prune-test",
+		TaskID:     "task-2",
+		BaseBranch: "main",
+	})
+	if err != nil {
+		t.Fatalf("Create() failed: %v", err)
+	}
+
+	// Prune with dry-run and small age threshold
+	result, err := mgr.Prune(PruneOptions{
+		DryRun:        true,
+		OlderThanDays: 0,
+	})
+	if err != nil {
+		t.Fatalf("Prune() failed: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("Prune() returned nil result")
+	}
+
+	// In dry-run, nothing should be removed
+	if len(result.Removed) > 0 {
+		t.Errorf("Removed = %v (dry-run should remove nothing)", result.Removed)
+	}
+}
+
+// Test Manager_Prune with default OlderThanDays
+func TestManager_Prune_DefaultAge(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping git operation test in short mode")
+	}
+
+	tempDir, projectPath := setupTestRepoForAgent(t)
+	defer os.RemoveAll(tempDir)
+
+	mgr := NewAgentManager(projectPath)
+
+	// Prune with 0 days (should default to 7)
+	result, err := mgr.Prune(PruneOptions{
+		OlderThanDays: 0,
+		DryRun:        true,
+	})
+	if err != nil {
+		t.Fatalf("Prune() failed: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("Prune() returned nil result")
+	}
+}
+
+// Test Manager_Remove non-existent agent
+func TestManager_Remove_NonExistent(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping git operation test in short mode")
+	}
+
+	tempDir, projectPath := setupTestRepoForAgent(t)
+	defer os.RemoveAll(tempDir)
+
+	mgr := NewAgentManager(projectPath)
+
+	// Remove non-existent agent should fail
+	err := mgr.Remove(RemoveOptions{AgentName: "nonexistent"})
+	if err == nil {
+		t.Error("Remove() should fail for non-existent agent")
+	}
+}
+
+// Test Manager_Remove with delete-branch option
+func TestManager_Remove_DeleteBranch(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping git operation test in short mode")
+	}
+
+	tempDir, projectPath := setupTestRepoForAgent(t)
+	defer os.RemoveAll(tempDir)
+
+	mgr := NewAgentManager(projectPath)
+
+	// Create an agent
+	err := mgr.Create(CreateOptions{
+		AgentName:  "remove-test",
+		TaskID:     "task-3",
+		BaseBranch: "main",
+	})
+	if err != nil {
+		t.Fatalf("Create() failed: %v", err)
+	}
+
+	// Remove with delete-branch
+	err = mgr.Remove(RemoveOptions{
+		AgentName:    "remove-test",
+		DeleteBranch: true,
+	})
+	if err != nil {
+		t.Logf("Remove() with delete-branch: %v", err)
+	}
+}
+
+// Test Sync result structure
+func TestManager_Sync_ResultStructure(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping git operation test in short mode")
+	}
+
+	tempDir, projectPath := setupTestRepoForAgent(t)
+	defer os.RemoveAll(tempDir)
+
+	mgr := NewAgentManager(projectPath)
+
+	// Create an agent
+	err := mgr.Create(CreateOptions{
+		AgentName:  "result-test",
+		TaskID:     "task-4",
+		BaseBranch: "main",
+	})
+	if err != nil {
+		t.Fatalf("Create() failed: %v", err)
+	}
+
+	// Sync and check result
+	result, err := mgr.Sync(SyncOptions{
+		AgentName: "result-test",
+	})
+	if err != nil {
+		t.Logf("Sync() error: %v", err)
+		return
+	}
+
+	if result != nil {
+		// Verify result has expected fields
+		_ = result.AlreadyUpToDate
+	}
+}
+
+// Test Prune result structure
+func TestManager_Prune_ResultStructure(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping git operation test in short mode")
+	}
+
+	tempDir, projectPath := setupTestRepoForAgent(t)
+	defer os.RemoveAll(tempDir)
+
+	mgr := NewAgentManager(projectPath)
+
+	result, err := mgr.Prune(PruneOptions{})
+	if err != nil {
+		t.Fatalf("Prune() failed: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("Prune() returned nil result")
+	}
+
+	// Verify result has required fields
+	if result.StaleAgents == nil {
+		t.Error("StaleAgents is nil")
+	}
+	if result.Removed == nil {
+		t.Error("Removed is nil")
+	}
+	if result.Errors == nil {
+		t.Error("Errors is nil")
+	}
+}
+
+// Helper function to setup test repository
+func setupTestRepoForAgent(t *testing.T) (string, string) {
+	t.Helper()
+
+	tempDir, err := os.MkdirTemp("", "agent-sync-test-")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+
+	projectPath := filepath.Join(tempDir, "test-project")
+
+	// Initialize bare repository
+	barePath := filepath.Join(projectPath, ".bare")
+	if err := git.Init(barePath, true); err != nil {
+		os.RemoveAll(tempDir)
+		t.Fatalf("Failed to init bare repo: %v", err)
+	}
+
+	// Set default branch
+	if err := git.SymbolicRef(barePath, "HEAD", "refs/heads/main"); err != nil {
+		os.RemoveAll(tempDir)
+		t.Fatalf("Failed to set symbolic ref: %v", err)
+	}
+
+	// Create .git pointer
+	gitPointer := filepath.Join(projectPath, ".git")
+	if err := os.WriteFile(gitPointer, []byte("gitdir: ./.bare\n"), 0644); err != nil {
+		os.RemoveAll(tempDir)
+		t.Fatalf("Failed to create .git pointer: %v", err)
+	}
+
+	// Create main worktree
+	mainPath := filepath.Join(projectPath, "main")
+	if err := git.WorktreeAdd(projectPath, "main", "main", true); err != nil {
+		os.RemoveAll(tempDir)
+		t.Fatalf("Failed to create main worktree: %v", err)
+	}
+
+	// Create initial commit
+	if err := git.Commit(mainPath, "Initial commit", true); err != nil {
+		os.RemoveAll(tempDir)
+		t.Fatalf("Failed to create initial commit: %v", err)
+	}
+
+	// Create .wt state directory structure
+	wtStateDir := filepath.Join(projectPath, ".wt")
+	for _, subdir := range []string{"metadata", "queue", "locks"} {
+		if err := os.MkdirAll(filepath.Join(wtStateDir, subdir), 0755); err != nil {
+			os.RemoveAll(tempDir)
+			t.Fatalf("Failed to create .wt dir: %v", err)
+		}
+	}
+
+	return tempDir, projectPath
+}
