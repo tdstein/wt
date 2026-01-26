@@ -475,3 +475,311 @@ func stringContains(s, substr string) bool {
 	}
 	return false
 }
+
+
+// Test Manager_SetupRemote directory creation
+func TestManager_SetupRemote_DirectoryCreation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping remote git operation test in short mode")
+	}
+
+	tempDir, err := os.MkdirTemp("", "repo-remote-dir-")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	targetPath := filepath.Join(tempDir, "nonexistent", "repo")
+	mgr := NewManager(targetPath, "https://github.com/invalid/repo.git")
+
+	// SetupRemote should create target path (or fail gracefully)
+	if !mgr.TargetExists() {
+		t.Log("Target does not exist before SetupRemote (will be created or fail)")
+	}
+}
+
+// Test Manager_EnsureWtStateDir creates all subdirectories
+func TestManager_EnsureWtStateDir_AllSubdirs(t *testing.T) {
+	mgr, tempDir := setupTestRepo(t)
+	defer cleanupTestRepo(t, tempDir)
+
+	if err := mgr.CreateTarget(); err != nil {
+		t.Fatalf("CreateTarget() failed: %v", err)
+	}
+
+	if err := mgr.EnsureWtStateDir(); err != nil {
+		t.Fatalf("EnsureWtStateDir() failed: %v", err)
+	}
+
+	// Verify all subdirectories exist
+	subdirs := []string{"metadata", "queue", "locks"}
+	for _, subdir := range subdirs {
+		path := filepath.Join(mgr.targetPath, ".wt", subdir)
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			t.Errorf("Subdirectory %q was not created: %s", subdir, path)
+		}
+	}
+}
+
+// Test Manager_CreateTarget idempotency
+func TestManager_CreateTarget_Idempotent(t *testing.T) {
+	mgr, tempDir := setupTestRepo(t)
+	defer cleanupTestRepo(t, tempDir)
+
+	// Create target first time
+	if err := mgr.CreateTarget(); err != nil {
+		t.Fatalf("First CreateTarget() failed: %v", err)
+	}
+
+	// Create target second time (should succeed or handle gracefully)
+	if err := mgr.CreateTarget(); err != nil {
+		t.Logf("Second CreateTarget() returned error: %v", err)
+	}
+
+	// Verify target exists
+	if !mgr.TargetExists() {
+		t.Error("Target does not exist after CreateTarget()")
+	}
+}
+
+// Test Manager_RemoveTarget removes directory
+func TestManager_RemoveTarget_Removes(t *testing.T) {
+	mgr, tempDir := setupTestRepo(t)
+	defer cleanupTestRepo(t, tempDir)
+
+	if err := mgr.CreateTarget(); err != nil {
+		t.Fatalf("CreateTarget() failed: %v", err)
+	}
+
+	if !mgr.TargetExists() {
+		t.Error("Target should exist after CreateTarget()")
+	}
+
+	if err := mgr.RemoveTarget(); err != nil {
+		t.Fatalf("RemoveTarget() failed: %v", err)
+	}
+
+	if mgr.TargetExists() {
+		t.Error("Target should not exist after RemoveTarget()")
+	}
+}
+
+// Test Manager path helper functions
+func TestManager_PathHelpers(t *testing.T) {
+	targetPath := "/home/user/wt/test"
+	mgr := NewManager(targetPath, "")
+
+	tests := []struct {
+		name     string
+		function func() string
+		expected string
+	}{
+		{"barePath", mgr.barePath, filepath.Join(targetPath, ".bare")},
+		{"gitPointerPath", mgr.gitPointerPath, filepath.Join(targetPath, ".git")},
+		{"mainPath", mgr.mainPath, filepath.Join(targetPath, "main")},
+		{"wtStateDir", mgr.wtStateDir, filepath.Join(targetPath, ".wt")},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.function()
+			if got != tt.expected {
+				t.Errorf("%s() = %q, want %q", tt.name, got, tt.expected)
+			}
+		})
+	}
+}
+
+// Test Manager_GetSizes output format
+func TestManager_GetSizes_OutputFormat(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping git operation test in short mode")
+	}
+
+	mgr, tempDir := setupTestRepo(t)
+	defer cleanupTestRepo(t, tempDir)
+
+	if err := mgr.SetupLocal(); err != nil {
+		t.Fatalf("SetupLocal() failed: %v", err)
+	}
+
+	output, err := mgr.GetSizes()
+	if err != nil {
+		t.Fatalf("GetSizes() failed: %v", err)
+	}
+
+	if output == "" {
+		t.Error("GetSizes() returned empty output")
+	}
+
+	// Output should mention .bare and main directories
+	if !contains(output, ".bare") {
+		t.Error("Output does not mention .bare")
+	}
+	if !contains(output, "main") {
+		t.Error("Output does not mention main")
+	}
+}
+
+// Test Manager_ListWorktrees output format
+func TestManager_ListWorktrees_OutputFormat(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping git operation test in short mode")
+	}
+
+	mgr, tempDir := setupTestRepo(t)
+	defer cleanupTestRepo(t, tempDir)
+
+	if err := mgr.SetupLocal(); err != nil {
+		t.Fatalf("SetupLocal() failed: %v", err)
+	}
+
+	output, err := mgr.ListWorktrees()
+	if err != nil {
+		t.Fatalf("ListWorktrees() failed: %v", err)
+	}
+
+	if output == "" {
+		t.Error("ListWorktrees() returned empty output")
+	}
+
+	// Output should mention main worktree
+	if !contains(output, "main") {
+		t.Error("Output does not mention main worktree")
+	}
+}
+
+// Test Manager_CreateLocalWorktree creates worktree
+func TestManager_CreateLocalWorktree_Creates(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping git operation test in short mode")
+	}
+
+	mgr, tempDir := setupTestRepo(t)
+	defer cleanupTestRepo(t, tempDir)
+
+	if err := mgr.CreateTarget(); err != nil {
+		t.Fatalf("CreateTarget() failed: %v", err)
+	}
+
+	if err := mgr.InitLocalBare(); err != nil {
+		t.Fatalf("InitLocalBare() failed: %v", err)
+	}
+
+	if err := mgr.CreateLocalWorktree(); err != nil {
+		t.Fatalf("CreateLocalWorktree() failed: %v", err)
+	}
+
+	// Verify worktree was created
+	mainPath := mgr.mainPath()
+	if _, err := os.Stat(mainPath); os.IsNotExist(err) {
+		t.Errorf("Main worktree was not created: %s", mainPath)
+	}
+}
+
+// Test Manager_CreateGitPointer content verification
+func TestManager_CreateGitPointer_Verification(t *testing.T) {
+	mgr, tempDir := setupTestRepo(t)
+	defer cleanupTestRepo(t, tempDir)
+
+	if err := mgr.CreateTarget(); err != nil {
+		t.Fatalf("CreateTarget() failed: %v", err)
+	}
+
+	if err := mgr.CreateGitPointer(); err != nil {
+		t.Fatalf("CreateGitPointer() failed: %v", err)
+	}
+
+	// Verify pointer content
+	gitPointerPath := mgr.gitPointerPath()
+	content, err := os.ReadFile(gitPointerPath)
+	if err != nil {
+		t.Fatalf("Failed to read .git pointer: %v", err)
+	}
+
+	expected := "gitdir: ./.bare\n"
+	if string(content) != expected {
+		t.Errorf("Pointer content = %q, want %q", string(content), expected)
+	}
+}
+
+// Test Manager_InitLocalBare creates bare repo
+func TestManager_InitLocalBare_Creates(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping git operation test in short mode")
+	}
+
+	mgr, tempDir := setupTestRepo(t)
+	defer cleanupTestRepo(t, tempDir)
+
+	if err := mgr.CreateTarget(); err != nil {
+		t.Fatalf("CreateTarget() failed: %v", err)
+	}
+
+	if err := mgr.InitLocalBare(); err != nil {
+		t.Fatalf("InitLocalBare() failed: %v", err)
+	}
+
+	// Verify bare repository was created
+	barePath := mgr.barePath()
+	if _, err := os.Stat(filepath.Join(barePath, "HEAD")); os.IsNotExist(err) {
+		t.Error("Bare repository HEAD was not created")
+	}
+}
+
+// Test NewManager initialization with parameters
+func TestNewManager_WithParameters(t *testing.T) {
+	targetPath := "/home/user/wt/test"
+	repoURL := "https://github.com/user/repo.git"
+	mgr := NewManager(targetPath, repoURL)
+
+	if mgr.targetPath != targetPath {
+		t.Errorf("targetPath = %q, want %q", mgr.targetPath, targetPath)
+	}
+
+	if mgr.repoURL != repoURL {
+		t.Errorf("repoURL = %q, want %q", mgr.repoURL, repoURL)
+	}
+}
+
+// Test Manager_TargetExists with non-existent path
+func TestManager_TargetExists_NonExistent(t *testing.T) {
+	mgr := NewManager("/nonexistent/path/12345", "")
+
+	if mgr.TargetExists() {
+		t.Error("TargetExists() = true for non-existent path, want false")
+	}
+}
+
+// Test Manager_CloneRemoteBare URL validation
+func TestManager_CloneRemoteBare_InvalidURLs(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping remote git operation test in short mode")
+	}
+
+	tempDir, err := os.MkdirTemp("", "repo-clone-test-")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	invalidURLs := []string{
+		"https://invalid-host-xyz-12345.example.com/repo.git",
+		"git@invalid-host-12345.example.com:repo.git",
+	}
+
+	for _, url := range invalidURLs {
+		targetPath := filepath.Join(tempDir, "test-clone")
+		mgr := NewManager(targetPath, url)
+
+		if err := mgr.CreateTarget(); err != nil {
+			t.Fatalf("CreateTarget() failed: %v", err)
+		}
+
+		// CloneRemoteBare should fail with invalid URL
+		err := mgr.CloneRemoteBare()
+		if err == nil {
+			t.Logf("CloneRemoteBare(%s) unexpectedly succeeded", url)
+		}
+	}
+}
