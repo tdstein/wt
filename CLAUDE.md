@@ -147,7 +147,7 @@ wt [repo-url|name] [name]           # Root: Setup bare repo
 
 **State-Based Queue System**: Tasks move through directories:
 ```
-.bare/task-queue/
+.wt/queue/
 ├── pending/        # Available for claiming
 ├── claimed/        # Actively being worked on
 ├── completed/      # Successfully finished
