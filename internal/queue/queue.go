@@ -56,7 +56,7 @@ func NewManager(targetPath string) *Manager {
 
 // queueDir returns the queue directory path
 func (m *Manager) queueDir() string {
-	return filepath.Join(m.targetPath, ".bare", "task-queue")
+	return filepath.Join(m.targetPath, ".wt", "queue")
 }
 
 // stateDir returns the directory path for a specific state
