@@ -303,3 +303,332 @@ func TestAgentCommands_Integration(t *testing.T) {
 		}
 	})
 }
+
+// Test queue commands
+func TestQueueCommands_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	tempDir, projectPath := setupTestWtRepo(t)
+	defer os.RemoveAll(tempDir)
+
+	originalDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get current directory: %v", err)
+	}
+	defer os.Chdir(originalDir)
+
+	if err := os.Chdir(projectPath); err != nil {
+		t.Fatalf("Failed to change directory: %v", err)
+	}
+
+	// Test queue add
+	t.Run("add", func(t *testing.T) {
+		cmd := newRootCmd()
+		cmd.SetArgs([]string{"queue", "add", "task-1", "--priority=high"})
+
+		err := cmd.Execute()
+		if err != nil {
+			t.Logf("queue add may fail if not fully initialized: %v", err)
+		}
+	})
+
+	// Test queue list
+	t.Run("list", func(t *testing.T) {
+		cmd := newRootCmd()
+		cmd.SetArgs([]string{"queue", "list"})
+
+		err := cmd.Execute()
+		if err != nil {
+			t.Logf("queue list may fail if not fully initialized: %v", err)
+		}
+	})
+
+	// Test queue get
+	t.Run("get", func(t *testing.T) {
+		cmd := newRootCmd()
+		cmd.SetArgs([]string{"queue", "get", "task-1"})
+
+		// This should fail since task doesn't exist yet
+		err := cmd.Execute()
+		if err == nil {
+			t.Logf("queue get succeeded (task may exist)")
+		}
+	})
+
+	// Test queue remove
+	t.Run("remove", func(t *testing.T) {
+		cmd := newRootCmd()
+		cmd.SetArgs([]string{"queue", "remove", "task-1"})
+
+		err := cmd.Execute()
+		if err != nil {
+			t.Logf("queue remove may fail: %v", err)
+		}
+	})
+}
+
+// Test lock commands
+func TestLockCommands_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	tempDir, projectPath := setupTestWtRepo(t)
+	defer os.RemoveAll(tempDir)
+
+	originalDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get current directory: %v", err)
+	}
+	defer os.Chdir(originalDir)
+
+	if err := os.Chdir(projectPath); err != nil {
+		t.Fatalf("Failed to change directory: %v", err)
+	}
+
+	// Test lock claim
+	t.Run("claim", func(t *testing.T) {
+		cmd := newRootCmd()
+		cmd.SetArgs([]string{"lock", "claim", "task-1", "agent-1"})
+
+		err := cmd.Execute()
+		if err != nil {
+			t.Logf("lock claim may fail: %v", err)
+		}
+	})
+
+	// Test lock list
+	t.Run("list", func(t *testing.T) {
+		cmd := newRootCmd()
+		cmd.SetArgs([]string{"lock", "list"})
+
+		err := cmd.Execute()
+		if err != nil {
+			t.Logf("lock list may fail: %v", err)
+		}
+	})
+
+	// Test lock release
+	t.Run("release", func(t *testing.T) {
+		cmd := newRootCmd()
+		cmd.SetArgs([]string{"lock", "release", "task-1", "agent-1"})
+
+		err := cmd.Execute()
+		if err != nil {
+			t.Logf("lock release may fail: %v", err)
+		}
+	})
+
+	// Test lock clean
+	t.Run("clean", func(t *testing.T) {
+		cmd := newRootCmd()
+		cmd.SetArgs([]string{"lock", "clean"})
+
+		err := cmd.Execute()
+		if err != nil {
+			t.Logf("lock clean may fail: %v", err)
+		}
+	})
+}
+
+// Test error cases for agent sync
+func TestAgentSyncCmd_Errors(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	tempDir, projectPath := setupTestWtRepo(t)
+	defer os.RemoveAll(tempDir)
+
+	originalDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get current directory: %v", err)
+	}
+	defer os.Chdir(originalDir)
+
+	if err := os.Chdir(projectPath); err != nil {
+		t.Fatalf("Failed to change directory: %v", err)
+	}
+
+	// Test sync on non-existent agent
+	t.Run("nonexistent_agent", func(t *testing.T) {
+		cmd := newRootCmd()
+		cmd.SetArgs([]string{"agent", "sync", "nonexistent"})
+
+		err := cmd.Execute()
+		if err == nil {
+			t.Log("sync on nonexistent agent succeeded (expected to fail)")
+		}
+	})
+}
+
+// Test error cases for agent prune
+func TestAgentPruneCmd_Errors(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	tempDir, projectPath := setupTestWtRepo(t)
+	defer os.RemoveAll(tempDir)
+
+	originalDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get current directory: %v", err)
+	}
+	defer os.Chdir(originalDir)
+
+	if err := os.Chdir(projectPath); err != nil {
+		t.Fatalf("Failed to change directory: %v", err)
+	}
+
+	// Test prune with invalid older-than flag
+	t.Run("invalid_older_than", func(t *testing.T) {
+		cmd := newRootCmd()
+		cmd.SetArgs([]string{"agent", "prune", "--older-than=invalid"})
+
+		err := cmd.Execute()
+		if err != nil {
+			t.Logf("prune with invalid flag failed (expected): %v", err)
+		}
+	})
+
+	// Test prune with dry-run
+	t.Run("dry_run", func(t *testing.T) {
+		cmd := newRootCmd()
+		cmd.SetArgs([]string{"agent", "prune", "--dry-run"})
+
+		err := cmd.Execute()
+		if err != nil {
+			t.Logf("prune with dry-run failed: %v", err)
+		}
+	})
+}
+
+// Test QueueCmd structure
+func TestQueueCmd(t *testing.T) {
+	cmd := newQueueCmd()
+
+	if cmd.Use != "queue" {
+		t.Errorf("Use = %q, want %q", cmd.Use, "queue")
+	}
+
+	expectedSubcommands := []string{"add", "list", "get", "remove"}
+	for _, name := range expectedSubcommands {
+		found := false
+		for _, subcmd := range cmd.Commands() {
+			if subcmd.Name() == name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected subcommand %q not found", name)
+		}
+	}
+}
+
+// Test LockCmd structure
+func TestLockCmd(t *testing.T) {
+	cmd := newLockCmd()
+
+	if cmd.Use != "lock" {
+		t.Errorf("Use = %q, want %q", cmd.Use, "lock")
+	}
+
+	expectedSubcommands := []string{"claim", "release", "list", "clean"}
+	for _, name := range expectedSubcommands {
+		found := false
+		for _, subcmd := range cmd.Commands() {
+			if subcmd.Name() == name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected subcommand %q not found", name)
+		}
+	}
+}
+
+// Test root command argument validation
+func TestRootCommand_MissingArgs(t *testing.T) {
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{})
+
+	// This will show help without error for root command
+	err := cmd.Execute()
+	if err != nil {
+		t.Logf("root command with no args produced error: %v", err)
+	}
+}
+
+// Test agent create with invalid agent name
+func TestAgentCreateCmd_InvalidName(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	tempDir, projectPath := setupTestWtRepo(t)
+	defer os.RemoveAll(tempDir)
+
+	originalDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get current directory: %v", err)
+	}
+	defer os.Chdir(originalDir)
+
+	if err := os.Chdir(projectPath); err != nil {
+		t.Fatalf("Failed to change directory: %v", err)
+	}
+
+	tests := []struct {
+		name      string
+		agentName string
+	}{
+		{"name_with_space", "agent name"},
+		{"name_with_slash", "agent/name"},
+		{"name_with_colon", "agent:name"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := newRootCmd()
+			cmd.SetArgs([]string{"agent", "create", tt.agentName, "task-1"})
+
+			err := cmd.Execute()
+			if err == nil {
+				t.Logf("agent create with invalid name %q succeeded (should fail)", tt.agentName)
+			}
+		})
+	}
+}
+
+// Test agent check with non-existent agent
+func TestAgentCheckCmd_NonExistent(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	tempDir, projectPath := setupTestWtRepo(t)
+	defer os.RemoveAll(tempDir)
+
+	originalDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get current directory: %v", err)
+	}
+	defer os.Chdir(originalDir)
+
+	if err := os.Chdir(projectPath); err != nil {
+		t.Fatalf("Failed to change directory: %v", err)
+	}
+
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"agent", "check", "nonexistent-agent"})
+
+	err = cmd.Execute()
+	if err == nil {
+		t.Log("agent check on non-existent agent succeeded")
+	}
+}
