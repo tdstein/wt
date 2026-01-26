@@ -29,7 +29,7 @@ func NewManager(targetPath string) *Manager {
 
 // lockDir returns the lock directory path
 func (m *Manager) lockDir() string {
-	return filepath.Join(m.targetPath, ".bare", "locks")
+	return filepath.Join(m.targetPath, ".wt", "locks")
 }
 
 // lockFile returns the lock file path for a task
