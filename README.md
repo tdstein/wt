@@ -1,6 +1,8 @@
-# wt - Git Worktree Setup for Parallel Agents
+# wt - Parallel Agent Coordination Tool
 
-A CLI tool that creates bare git repository structures optimized for multiple Claude Code agents working in parallel worktrees.
+**Vision: Scale AI-assisted development linearly with agent count.**
+
+A CLI tool that manages bare git repositories and coordinates multiple agents working in parallel worktrees with task queues, locks, and automatic conflict detection.
 
 ## Installation
 
@@ -196,26 +198,7 @@ go test ./...
 make test-coverage
 ```
 
-## Project Structure
+## Documentation
 
-```
-wt/
-├── bin/wt                  # Compiled Go binary
-├── cmd/wt/                 # CLI entry point
-│   ├── main.go             # Command definitions
-│   ├── utils.go            # Logging and helpers
-│   └── main_test.go        # CLI integration tests
-├── internal/               # Internal packages
-│   ├── parse/              # URL and argument parsing
-│   ├── git/                # Git command wrapper
-│   ├── repo/               # Repository operations
-│   ├── agent/              # Agent management
-│   │   ├── agent.go        # Agent operations
-│   │   ├── metadata.go     # Metadata management
-│   │   ├── agent_test.go   # Agent tests
-│   │   └── metadata_test.go # Metadata tests
-│   └── conflict/           # Conflict detection
-├── go.mod                  # Go module definition
-├── go.sum                  # Dependency checksums
-└── Makefile                # Build and install targets
-```
+- **[parallel-workflows.md](docs/parallel-workflows.md)** - Guide to using wt with parallel agent workflows
+- **[CLAUDE.md](CLAUDE.md)** - Development guide for contributors
