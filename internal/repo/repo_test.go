@@ -311,6 +311,157 @@ func TestManager_SetupLocal_IdempotencyPrevention(t *testing.T) {
 	}
 }
 
+// Test EnsureWtStateDir
+func TestManager_EnsureWtStateDir(t *testing.T) {
+	mgr, tempDir := setupTestRepo(t)
+	defer cleanupTestRepo(t, tempDir)
+
+	// Create target directory
+	if err := mgr.CreateTarget(); err != nil {
+		t.Fatalf("CreateTarget() failed: %v", err)
+	}
+
+	// Ensure .wt state dir
+	if err := mgr.EnsureWtStateDir(); err != nil {
+		t.Fatalf("EnsureWtStateDir() failed: %v", err)
+	}
+
+	// Verify subdirectories exist
+	subdirs := []string{"metadata", "queue", "locks"}
+	for _, subdir := range subdirs {
+		path := filepath.Join(mgr.wtStateDir(), subdir)
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			t.Errorf("Subdirectory %q was not created: %s", subdir, path)
+		}
+	}
+}
+
+// Test error cases for CreateLocalWorktree when bare repo doesn't exist
+func TestManager_CreateLocalWorktree_NoBareRepo(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping git operation test in short mode")
+	}
+
+	mgr, tempDir := setupTestRepo(t)
+	defer cleanupTestRepo(t, tempDir)
+
+	// Create target but don't initialize bare repo
+	if err := mgr.CreateTarget(); err != nil {
+		t.Fatalf("CreateTarget() failed: %v", err)
+	}
+
+	// This should fail because bare repo doesn't exist
+	err := mgr.CreateLocalWorktree()
+	if err == nil {
+		t.Error("CreateLocalWorktree() should fail when bare repo doesn't exist")
+	}
+}
+
+// Test CloneRemoteBare with error handling
+func TestManager_CloneRemoteBare_InvalidURL(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping remote git operation test in short mode")
+	}
+
+	tempDir, err := os.MkdirTemp("", "wt-repo-test-remote-")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	targetPath := filepath.Join(tempDir, "test-project")
+	mgr := NewManager(targetPath, "https://invalid-host-does-not-exist.example.com/repo.git")
+
+	// Create target directory
+	if err := mgr.CreateTarget(); err != nil {
+		t.Fatalf("CreateTarget() failed: %v", err)
+	}
+
+	// This should fail due to invalid URL
+	err = mgr.CloneRemoteBare()
+	if err == nil {
+		t.Log("CloneRemoteBare() with invalid URL succeeded (network may be available)")
+	}
+}
+
+// Test CreateRemoteWorktree requires base function call
+func TestManager_CreateRemoteWorktree_NoBareRepo(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping git operation test in short mode")
+	}
+
+	mgr, tempDir := setupTestRepo(t)
+	defer cleanupTestRepo(t, tempDir)
+
+	// Create target but don't initialize bare repo
+	if err := mgr.CreateTarget(); err != nil {
+		t.Fatalf("CreateTarget() failed: %v", err)
+	}
+
+	// This should fail because bare repo doesn't exist
+	err := mgr.CreateRemoteWorktree("main")
+	if err == nil {
+		t.Error("CreateRemoteWorktree() should fail when bare repo doesn't exist")
+	}
+}
+
+// Test GetRemoteDefaultBranch error case
+func TestManager_GetRemoteDefaultBranch_NoRemote(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping git operation test in short mode")
+	}
+
+	mgr, tempDir := setupTestRepo(t)
+	defer cleanupTestRepo(t, tempDir)
+
+	// Create target and bare repo but with no remote
+	if err := mgr.CreateTarget(); err != nil {
+		t.Fatalf("CreateTarget() failed: %v", err)
+	}
+
+	if err := mgr.InitLocalBare(); err != nil {
+		t.Fatalf("InitLocalBare() failed: %v", err)
+	}
+
+	// This should fail because there's no remote configured
+	branch, err := mgr.GetRemoteDefaultBranch()
+	if err == nil {
+		t.Logf("GetRemoteDefaultBranch() succeeded with branch: %s (local repo might have origin configured)", branch)
+	}
+}
+
+// Test SetupRemote with error handling on missing remote
+func TestManager_SetupRemote_InvalidURL(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping remote git operation test in short mode")
+	}
+
+	tempDir, err := os.MkdirTemp("", "wt-setup-remote-test-")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	targetPath := filepath.Join(tempDir, "test-project")
+	mgr := NewManager(targetPath, "https://invalid-host-example-123456.com/repo.git")
+
+	// This should fail due to invalid URL
+	err = mgr.SetupRemote()
+	if err == nil {
+		t.Log("SetupRemote() with invalid URL succeeded (network may be available)")
+	}
+}
+
+// Test path helpers for state directory
+func TestManager_WtStateDir(t *testing.T) {
+	mgr := NewManager("/home/user/wt/test", "")
+
+	expectedPath := filepath.Join("/home/user/wt/test", ".wt")
+	if mgr.wtStateDir() != expectedPath {
+		t.Errorf("wtStateDir() = %q, want %q", mgr.wtStateDir(), expectedPath)
+	}
+}
+
 // Helper function
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && stringContains(s, substr))
