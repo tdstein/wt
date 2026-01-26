@@ -82,7 +82,7 @@ wt agent create bob 5678 main
 Each agent worktree includes:
 - Independent working directory at `~/wt/my-project/<agent-name>/`
 - Dedicated branch following `task/<task-id>/<agent-name>` convention
-- JSON metadata tracked in `.bare/worktree-metadata/<agent>.json`
+- JSON metadata tracked in `.wt/metadata/<agent>.json`
 - Automatic timestamp tracking for age-based cleanup
 
 ### Listing Agent Worktrees

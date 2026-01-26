@@ -292,7 +292,7 @@ wt agent prune --older-than=7d --dry-run
 
 ## Metadata Structure
 
-Each agent worktree has metadata stored in `.bare/worktree-metadata/<agent>.json`:
+Each agent worktree has metadata stored in `.wt/metadata/<agent>.json`:
 
 ```json
 {
