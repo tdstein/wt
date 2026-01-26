@@ -47,7 +47,7 @@ func NewMetadataManager(targetPath string) *MetadataManager {
 
 // metadataDir returns the metadata directory path
 func (m *MetadataManager) metadataDir() string {
-	return filepath.Join(m.targetPath, ".bare", "worktree-metadata")
+	return filepath.Join(m.targetPath, ".wt", "metadata")
 }
 
 // metadataFile returns the metadata file path for an agent
