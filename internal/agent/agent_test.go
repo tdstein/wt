@@ -141,8 +141,8 @@ func TestManager_Create(t *testing.T) {
 		t.Fatalf("Failed to get metadata: %v", err)
 	}
 
-	if metadata.Branch != "work/alice" {
-		t.Errorf("metadata.Branch = %q, want %q", metadata.Branch, "work/alice")
+	if metadata.Branch != "alice" {
+		t.Errorf("metadata.Branch = %q, want %q", metadata.Branch, "alice")
 	}
 
 	if metadata.BaseBranch != "main" {

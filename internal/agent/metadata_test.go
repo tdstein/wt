@@ -67,7 +67,7 @@ func TestMetadataManager_Create(t *testing.T) {
 	mgr, tempDir := setupTestManager(t)
 	defer cleanupTestManager(t, tempDir)
 
-	err := mgr.Create("alice", "work/alice", "main")
+	err := mgr.Create("alice", "alice", "main")
 	if err != nil {
 		t.Fatalf("Create() failed: %v", err)
 	}
@@ -87,8 +87,8 @@ func TestMetadataManager_Create(t *testing.T) {
 	if metadata.Agent != "alice" {
 		t.Errorf("Agent = %q, want %q", metadata.Agent, "alice")
 	}
-	if metadata.Branch != "work/alice" {
-		t.Errorf("Branch = %q, want %q", metadata.Branch, "work/alice")
+	if metadata.Branch != "alice" {
+		t.Errorf("Branch = %q, want %q", metadata.Branch, "alice")
 	}
 	if metadata.BaseBranch != "main" {
 		t.Errorf("BaseBranch = %q, want %q", metadata.BaseBranch, "main")
@@ -109,7 +109,7 @@ func TestMetadataManager_Touch(t *testing.T) {
 	defer cleanupTestManager(t, tempDir)
 
 	// Create initial metadata
-	err := mgr.Create("bob", "work/bob", "main")
+	err := mgr.Create("bob", "bob", "main")
 	if err != nil {
 		t.Fatalf("Create() failed: %v", err)
 	}
@@ -162,7 +162,7 @@ func TestMetadataManager_GetField(t *testing.T) {
 	mgr, tempDir := setupTestManager(t)
 	defer cleanupTestManager(t, tempDir)
 
-	err := mgr.Create("charlie", "work/charlie", "develop")
+	err := mgr.Create("charlie", "charlie", "develop")
 	if err != nil {
 		t.Fatalf("Create() failed: %v", err)
 	}
@@ -174,7 +174,7 @@ func TestMetadataManager_GetField(t *testing.T) {
 		wantError bool
 	}{
 		{"agent field", "agent", "charlie", false},
-		{"branch field", "branch", "work/charlie", false},
+		{"branch field", "branch", "charlie", false},
 		{"base_branch field", "base_branch", "develop", false},
 		{"status field", "status", "active", false},
 		{"unknown field", "unknown", "", true},
@@ -225,7 +225,7 @@ func TestMetadataManager_Remove(t *testing.T) {
 	defer cleanupTestManager(t, tempDir)
 
 	// Create metadata
-	err := mgr.Create("david", "work/david", "main")
+	err := mgr.Create("david", "david", "main")
 	if err != nil {
 		t.Fatalf("Create() failed: %v", err)
 	}
@@ -269,7 +269,7 @@ func TestMetadataManager_List(t *testing.T) {
 	// Create some metadata
 	agents := []string{"alice", "bob", "charlie"}
 	for _, agent := range agents {
-		err := mgr.Create(agent, fmt.Sprintf("work/%s", agent), "main")
+		err := mgr.Create(agent, fmt.Sprintf("%s", agent), "main")
 		if err != nil {
 			t.Fatalf("Create(%q) failed: %v", agent, err)
 		}
@@ -303,7 +303,7 @@ func TestMetadataManager_Exists(t *testing.T) {
 	}
 
 	// Create metadata
-	err := mgr.Create("emily", "work/emily", "main")
+	err := mgr.Create("emily", "emily", "main")
 	if err != nil {
 		t.Fatalf("Create() failed: %v", err)
 	}
@@ -319,7 +319,7 @@ func TestMetadataManager_Age(t *testing.T) {
 	defer cleanupTestManager(t, tempDir)
 
 	// Create metadata
-	err := mgr.Create("frank", "work/frank", "main")
+	err := mgr.Create("frank", "frank", "main")
 	if err != nil {
 		t.Fatalf("Create() failed: %v", err)
 	}
@@ -384,7 +384,7 @@ func TestMetadataManager_UpdateProgress(t *testing.T) {
 	defer cleanupTestManager(t, tempDir)
 
 	// Create metadata
-	err := mgr.Create("alice", "work/alice", "main")
+	err := mgr.Create("alice", "alice", "main")
 	if err != nil {
 		t.Fatalf("Create() failed: %v", err)
 	}
@@ -433,7 +433,7 @@ func TestMetadataManager_UpdateState(t *testing.T) {
 	defer cleanupTestManager(t, tempDir)
 
 	// Create metadata
-	err := mgr.Create("bob", "work/bob", "main")
+	err := mgr.Create("bob", "bob", "main")
 	if err != nil {
 		t.Fatalf("Create() failed: %v", err)
 	}
@@ -471,7 +471,7 @@ func TestMetadataManager_SetError(t *testing.T) {
 	defer cleanupTestManager(t, tempDir)
 
 	// Create metadata
-	err := mgr.Create("charlie", "work/charlie", "main")
+	err := mgr.Create("charlie", "charlie", "main")
 	if err != nil {
 		t.Fatalf("Create() failed: %v", err)
 	}
@@ -504,7 +504,7 @@ func TestMetadataManager_SetPID(t *testing.T) {
 	defer cleanupTestManager(t, tempDir)
 
 	// Create metadata
-	err := mgr.Create("david", "work/david", "main")
+	err := mgr.Create("david", "david", "main")
 	if err != nil {
 		t.Fatalf("Create() failed: %v", err)
 	}
@@ -538,7 +538,7 @@ func TestMetadataManager_AddCheckpoint(t *testing.T) {
 	defer cleanupTestManager(t, tempDir)
 
 	// Create metadata
-	err := mgr.Create("emily", "work/emily", "main")
+	err := mgr.Create("emily", "emily", "main")
 	if err != nil {
 		t.Fatalf("Create() failed: %v", err)
 	}
@@ -602,7 +602,7 @@ func TestMetadataManager_GetCheckpoints(t *testing.T) {
 	defer cleanupTestManager(t, tempDir)
 
 	// Create metadata
-	err := mgr.Create("frank", "work/frank", "main")
+	err := mgr.Create("frank", "frank", "main")
 	if err != nil {
 		t.Fatalf("Create() failed: %v", err)
 	}
@@ -631,7 +631,7 @@ func TestMetadataBackwardsCompatibility(t *testing.T) {
 	// Create old-style metadata (without enhanced fields)
 	oldMetadata := `{
   "agent": "grace",
-  "branch": "work/grace",
+  "branch": "grace",
   "base_branch": "main",
   "created": "2024-01-01T00:00:00Z",
   "last_activity": "2024-01-01T00:00:00Z",

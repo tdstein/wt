@@ -69,8 +69,8 @@ func (m *Manager) Create(opts CreateOptions) error {
 		return fmt.Errorf("worktree already exists: %s", worktreePath)
 	}
 
-	// Create branch name: work/<agent-name>
-	branchName := fmt.Sprintf("work/%s", opts.AgentName)
+	// Create branch name: <agent-name>
+	branchName := opts.AgentName
 
 	// Check if branch already exists
 	_, err := git.New("rev-parse", "--verify", branchName).

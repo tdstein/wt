@@ -212,7 +212,7 @@ func newAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add <name> [base-branch]",
 		Short: "Create a new agent worktree",
-		Long: `Create a new agent worktree with branch work/<name>.
+		Long: `Create a new agent worktree with branch <name>.
 
 Examples:
   wt add alice              Create worktree from main
@@ -247,7 +247,7 @@ func runAdd(cmd *cobra.Command, args []string) error {
 	}
 
 	logSuccess("Agent worktree created: %s", agentName)
-	fmt.Printf("Branch: work/%s\n", agentName)
+	fmt.Printf("Branch: %s\n", agentName)
 	fmt.Printf("Path: %s/%s\n", targetPath, agentName)
 	return nil
 }
