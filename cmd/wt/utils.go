@@ -12,7 +12,10 @@ import (
 // Context keys
 type contextKey string
 
-const targetPathKey contextKey = "targetPath"
+const (
+	targetPathKey contextKey = "targetPath"
+	taskIDKey     contextKey = "taskID"
+)
 
 // Colors for terminal output
 const (
@@ -122,6 +125,18 @@ func withTargetPath(ctx context.Context, targetPath string) context.Context {
 func getTargetPath(ctx context.Context) string {
 	if targetPath, ok := ctx.Value(targetPathKey).(string); ok {
 		return targetPath
+	}
+	return ""
+}
+
+// Context helpers for task ID
+func withTaskID(ctx context.Context, taskID string) context.Context {
+	return context.WithValue(ctx, taskIDKey, taskID)
+}
+
+func getTaskID(ctx context.Context) string {
+	if taskID, ok := ctx.Value(taskIDKey).(string); ok {
+		return taskID
 	}
 	return ""
 }
