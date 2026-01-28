@@ -28,40 +28,122 @@ func TestRootCommand(t *testing.T) {
 	}
 }
 
-func TestRootCommand_HasCreateCommand(t *testing.T) {
+func TestRootCommand_HasCloneCommand(t *testing.T) {
 	cmd := newRootCmd()
 
 	found := false
 	for _, subcmd := range cmd.Commands() {
-		if subcmd.Name() == "create" {
+		if subcmd.Name() == "clone" {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Error("create command not found in root")
+		t.Error("clone command not found in root")
 	}
 }
 
-func TestRootCommand_HasTaskCommand(t *testing.T) {
+func TestRootCommand_HasInitCommand(t *testing.T) {
 	cmd := newRootCmd()
 
-	// Note: Task command uses dynamic routing, may appear differently
-	// Just verify root command is structured
-	if cmd == nil {
-		t.Error("root command is nil")
+	found := false
+	for _, subcmd := range cmd.Commands() {
+		if subcmd.Name() == "init" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("init command not found in root")
+	}
+}
+
+func TestRootCommand_HasAddCommand(t *testing.T) {
+	cmd := newRootCmd()
+
+	found := false
+	for _, subcmd := range cmd.Commands() {
+		if subcmd.Name() == "add" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("add command not found in root")
+	}
+}
+
+func TestRootCommand_HasRemoveCommand(t *testing.T) {
+	cmd := newRootCmd()
+
+	found := false
+	for _, subcmd := range cmd.Commands() {
+		if subcmd.Name() == "remove" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("remove command not found in root")
+	}
+}
+
+func TestRootCommand_HasListCommand(t *testing.T) {
+	cmd := newRootCmd()
+
+	found := false
+	for _, subcmd := range cmd.Commands() {
+		if subcmd.Name() == "list" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("list command not found in root")
 	}
 }
 
 // ============================================================================
-// Create Command Tests
+// Clone Command Tests
 // ============================================================================
 
-func TestCreateCmd_Basic(t *testing.T) {
-	cmd := newCreateCmd()
+func TestCloneCmd_Basic(t *testing.T) {
+	cmd := newCloneCmd()
 
-	if cmd.Use != "create <name> <task-id> [base-branch]" {
-		t.Errorf("Use = %q, want %q", cmd.Use, "create <name> <task-id> [base-branch]")
+	if cmd.Use != "clone <url> [target-dir]" {
+		t.Errorf("Use = %q, want %q", cmd.Use, "clone <url> [target-dir]")
+	}
+
+	if cmd.Short != "Clone a repository and set up worktree structure" {
+		t.Errorf("Short = %q, want %q", cmd.Short, "Clone a repository and set up worktree structure")
+	}
+}
+
+// ============================================================================
+// Init Command Tests
+// ============================================================================
+
+func TestInitCmd_Basic(t *testing.T) {
+	cmd := newInitCmd()
+
+	if cmd.Use != "init <target-dir>" {
+		t.Errorf("Use = %q, want %q", cmd.Use, "init <target-dir>")
+	}
+
+	if cmd.Short != "Initialize a new wt directory" {
+		t.Errorf("Short = %q, want %q", cmd.Short, "Initialize a new wt directory")
+	}
+}
+
+// ============================================================================
+// Add Command Tests
+// ============================================================================
+
+func TestAddCmd_Basic(t *testing.T) {
+	cmd := newAddCmd()
+
+	if cmd.Use != "add <name> [base-branch]" {
+		t.Errorf("Use = %q, want %q", cmd.Use, "add <name> [base-branch]")
 	}
 
 	if cmd.Short != "Create a new agent worktree" {
@@ -70,226 +152,11 @@ func TestCreateCmd_Basic(t *testing.T) {
 }
 
 // ============================================================================
-// Task Router Tests
+// Remove Command Tests
 // ============================================================================
 
-func TestTaskCmd_Basic(t *testing.T) {
-	cmd := newTaskCmd()
-
-	if cmd.Use != "<task-id> <operation> [args...]" {
-		t.Errorf("Use = %q, want %q", cmd.Use, "<task-id> <operation> [args...]")
-	}
-}
-
-func TestTaskCmd_HasLockCommand(t *testing.T) {
-	cmd := newTaskCmd()
-
-	found := false
-	for _, subcmd := range cmd.Commands() {
-		if subcmd.Name() == "lock" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("lock command not found in task router")
-	}
-}
-
-func TestTaskCmd_HasQueueCommand(t *testing.T) {
-	cmd := newTaskCmd()
-
-	found := false
-	for _, subcmd := range cmd.Commands() {
-		if subcmd.Name() == "queue" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("queue command not found in task router")
-	}
-}
-
-func TestTaskCmd_HasAgentCommand(t *testing.T) {
-	cmd := newTaskCmd()
-
-	found := false
-	for _, subcmd := range cmd.Commands() {
-		if subcmd.Name() == "agent" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("agent command not found in task router")
-	}
-}
-
-// ============================================================================
-// Lock Commands Tests
-// ============================================================================
-
-func TestLockCmd_HasAllSubcommands(t *testing.T) {
-	cmd := newTaskLockCmd()
-
-	expectedSubcommands := []string{"claim", "release", "list", "clean"}
-	for _, name := range expectedSubcommands {
-		found := false
-		for _, subcmd := range cmd.Commands() {
-			if subcmd.Name() == name {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("Expected subcommand %q not found in lock", name)
-		}
-	}
-}
-
-func TestLockClaimCmd_Basic(t *testing.T) {
-	cmd := newTaskLockClaimCmd()
-
-	if cmd.Use != "claim <agent-name>" {
-		t.Errorf("Use = %q, want %q", cmd.Use, "claim <agent-name>")
-	}
-
-	if cmd.Short != "Claim a lock for this task" {
-		t.Errorf("Short = %q, want %q", cmd.Short, "Claim a lock for this task")
-	}
-}
-
-func TestLockReleaseCmd_Basic(t *testing.T) {
-	cmd := newTaskLockReleaseCmd()
-
-	if cmd.Use != "release <agent-name>" {
-		t.Errorf("Use = %q, want %q", cmd.Use, "release <agent-name>")
-	}
-
-	if cmd.Short != "Release a lock for this task" {
-		t.Errorf("Short = %q, want %q", cmd.Short, "Release a lock for this task")
-	}
-}
-
-func TestLockListCmd_Basic(t *testing.T) {
-	cmd := newTaskLockListCmd()
-
-	if cmd.Use != "list" {
-		t.Errorf("Use = %q, want %q", cmd.Use, "list")
-	}
-
-	if cmd.Short != "List locks for this task" {
-		t.Errorf("Short = %q, want %q", cmd.Short, "List locks for this task")
-	}
-}
-
-func TestLockCleanCmd_Basic(t *testing.T) {
-	cmd := newTaskLockCleanCmd()
-
-	if cmd.Use != "clean" {
-		t.Errorf("Use = %q, want %q", cmd.Use, "clean")
-	}
-
-	if cmd.Short != "Clean stale locks for this task" {
-		t.Errorf("Short = %q, want %q", cmd.Short, "Clean stale locks for this task")
-	}
-}
-
-// ============================================================================
-// Queue Commands Tests
-// ============================================================================
-
-func TestQueueCmd_HasAllSubcommands(t *testing.T) {
-	cmd := newTaskQueueCmd()
-
-	expectedSubcommands := []string{"add", "list", "get", "remove"}
-	for _, name := range expectedSubcommands {
-		found := false
-		for _, subcmd := range cmd.Commands() {
-			if subcmd.Name() == name {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("Expected subcommand %q not found in queue", name)
-		}
-	}
-}
-
-func TestQueueAddCmd_Basic(t *testing.T) {
-	cmd := newTaskQueueAddCmd()
-
-	if cmd.Use != "add" {
-		t.Errorf("Use = %q, want %q", cmd.Use, "add")
-	}
-
-	if cmd.Short != "Add this task to the queue" {
-		t.Errorf("Short = %q, want %q", cmd.Short, "Add this task to the queue")
-	}
-}
-
-func TestQueueListCmd_Basic(t *testing.T) {
-	cmd := newTaskQueueListCmd()
-
-	if cmd.Use != "list" {
-		t.Errorf("Use = %q, want %q", cmd.Use, "list")
-	}
-
-	if cmd.Short != "List queue operations for this task" {
-		t.Errorf("Short = %q, want %q", cmd.Short, "List queue operations for this task")
-	}
-}
-
-func TestQueueGetCmd_Basic(t *testing.T) {
-	cmd := newTaskQueueGetCmd()
-
-	if cmd.Use != "get" {
-		t.Errorf("Use = %q, want %q", cmd.Use, "get")
-	}
-
-	if cmd.Short != "Get details for this task" {
-		t.Errorf("Short = %q, want %q", cmd.Short, "Get details for this task")
-	}
-}
-
-func TestQueueRemoveCmd_Basic(t *testing.T) {
-	cmd := newTaskQueueRemoveCmd()
-
-	if cmd.Use != "remove" {
-		t.Errorf("Use = %q, want %q", cmd.Use, "remove")
-	}
-
-	if cmd.Short != "Remove this task from the queue" {
-		t.Errorf("Short = %q, want %q", cmd.Short, "Remove this task from the queue")
-	}
-}
-
-// ============================================================================
-// Agent Commands Tests
-// ============================================================================
-
-func TestAgentCmd_HasAllSubcommands(t *testing.T) {
-	cmd := newTaskAgentCmd()
-
-	expectedSubcommands := []string{"remove", "list", "check", "sync", "prune", "status"}
-	for _, name := range expectedSubcommands {
-		found := false
-		for _, subcmd := range cmd.Commands() {
-			if subcmd.Name() == name {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("Expected subcommand %q not found in agent", name)
-		}
-	}
-}
-
-func TestAgentRemoveCmd_Basic(t *testing.T) {
-	cmd := newTaskAgentRemoveCmd()
+func TestRemoveCmd_Basic(t *testing.T) {
+	cmd := newRemoveCmd()
 
 	if cmd.Use != "remove <name>" {
 		t.Errorf("Use = %q, want %q", cmd.Use, "remove <name>")
@@ -300,8 +167,12 @@ func TestAgentRemoveCmd_Basic(t *testing.T) {
 	}
 }
 
-func TestAgentListCmd_Basic(t *testing.T) {
-	cmd := newTaskAgentListCmd()
+// ============================================================================
+// List Command Tests
+// ============================================================================
+
+func TestListCmd_Basic(t *testing.T) {
+	cmd := newListCmd()
 
 	if cmd.Use != "list" {
 		t.Errorf("Use = %q, want %q", cmd.Use, "list")
@@ -312,8 +183,28 @@ func TestAgentListCmd_Basic(t *testing.T) {
 	}
 }
 
-func TestAgentCheckCmd_Basic(t *testing.T) {
-	cmd := newTaskAgentCheckCmd()
+// ============================================================================
+// Status Command Tests
+// ============================================================================
+
+func TestStatusCmd_Basic(t *testing.T) {
+	cmd := newStatusCmd()
+
+	if cmd.Use != "status" {
+		t.Errorf("Use = %q, want %q", cmd.Use, "status")
+	}
+
+	if cmd.Short != "Show agent dashboard" {
+		t.Errorf("Short = %q, want %q", cmd.Short, "Show agent dashboard")
+	}
+}
+
+// ============================================================================
+// Check Command Tests
+// ============================================================================
+
+func TestCheckCmd_Basic(t *testing.T) {
+	cmd := newCheckCmd()
 
 	if cmd.Use != "check <name>" {
 		t.Errorf("Use = %q, want %q", cmd.Use, "check <name>")
@@ -324,8 +215,12 @@ func TestAgentCheckCmd_Basic(t *testing.T) {
 	}
 }
 
-func TestAgentSyncCmd_Basic(t *testing.T) {
-	cmd := newTaskAgentSyncCmd()
+// ============================================================================
+// Sync Command Tests
+// ============================================================================
+
+func TestSyncCmd_Basic(t *testing.T) {
+	cmd := newSyncCmd()
 
 	if cmd.Use != "sync <name>" {
 		t.Errorf("Use = %q, want %q", cmd.Use, "sync <name>")
@@ -336,8 +231,12 @@ func TestAgentSyncCmd_Basic(t *testing.T) {
 	}
 }
 
-func TestAgentPruneCmd_Basic(t *testing.T) {
-	cmd := newTaskAgentPruneCmd()
+// ============================================================================
+// Prune Command Tests
+// ============================================================================
+
+func TestPruneCmd_Basic(t *testing.T) {
+	cmd := newPruneCmd()
 
 	if cmd.Use != "prune" {
 		t.Errorf("Use = %q, want %q", cmd.Use, "prune")
@@ -345,18 +244,6 @@ func TestAgentPruneCmd_Basic(t *testing.T) {
 
 	if cmd.Short != "Remove stale agent worktrees" {
 		t.Errorf("Short = %q, want %q", cmd.Short, "Remove stale agent worktrees")
-	}
-}
-
-func TestAgentStatusCmd_Basic(t *testing.T) {
-	cmd := newTaskAgentStatusCmd()
-
-	if cmd.Use != "status" {
-		t.Errorf("Use = %q, want %q", cmd.Use, "status")
-	}
-
-	if cmd.Short != "Show agent dashboard" {
-		t.Errorf("Short = %q, want %q", cmd.Short, "Show agent dashboard")
 	}
 }
 
@@ -458,104 +345,84 @@ func TestFormatDuration_Days(t *testing.T) {
 // Integration Tests
 // ============================================================================
 
-func TestCommandStructure_RootToCreate(t *testing.T) {
+func TestCommandStructure_RootToClone(t *testing.T) {
 	root := newRootCmd()
 
-	// Find create command
-	var createCmd *cobra.Command
+	// Find clone command
+	var cloneCmd *cobra.Command
 	for _, cmd := range root.Commands() {
-		if cmd.Name() == "create" {
-			createCmd = cmd
+		if cmd.Name() == "clone" {
+			cloneCmd = cmd
 			break
 		}
 	}
 
-	if createCmd == nil {
-		t.Fatal("create command not found in root")
+	if cloneCmd == nil {
+		t.Fatal("clone command not found in root")
 	}
 
-	if createCmd.Use != "create <name> <task-id> [base-branch]" {
-		t.Errorf("create command structure incorrect: %q", createCmd.Use)
+	if cloneCmd.Use != "clone <url> [target-dir]" {
+		t.Errorf("clone command structure incorrect: %q", cloneCmd.Use)
 	}
 }
 
-func TestCommandStructure_RootToTask(t *testing.T) {
+func TestCommandStructure_RootToInit(t *testing.T) {
 	root := newRootCmd()
 
-	// The task command is added to root
-	found := false
+	// Find init command
+	var initCmd *cobra.Command
 	for _, cmd := range root.Commands() {
-		if strings.HasPrefix(cmd.Use, "<task-id>") {
-			found = true
+		if cmd.Name() == "init" {
+			initCmd = cmd
 			break
 		}
 	}
 
-	if !found {
-		t.Error("task router command not found in root")
+	if initCmd == nil {
+		t.Fatal("init command not found in root")
+	}
+
+	if initCmd.Use != "init <target-dir>" {
+		t.Errorf("init command structure incorrect: %q", initCmd.Use)
 	}
 }
 
-func TestLockCommandHierarchy(t *testing.T) {
-	taskCmd := newTaskLockCmd()
+func TestCommandStructure_RootToAdd(t *testing.T) {
+	root := newRootCmd()
 
-	// Verify all lock subcommands exist
-	subcommands := []string{"claim", "release", "list", "clean"}
-	foundCount := 0
-
-	for _, sc := range taskCmd.Commands() {
-		for _, expected := range subcommands {
-			if sc.Name() == expected {
-				foundCount++
-				break
-			}
+	// Find add command
+	var addCmd *cobra.Command
+	for _, cmd := range root.Commands() {
+		if cmd.Name() == "add" {
+			addCmd = cmd
+			break
 		}
 	}
 
-	if foundCount != len(subcommands) {
-		t.Errorf("Found %d/%d lock subcommands", foundCount, len(subcommands))
+	if addCmd == nil {
+		t.Fatal("add command not found in root")
+	}
+
+	if addCmd.Use != "add <name> [base-branch]" {
+		t.Errorf("add command structure incorrect: %q", addCmd.Use)
 	}
 }
 
-func TestQueueCommandHierarchy(t *testing.T) {
-	taskCmd := newTaskQueueCmd()
+func TestCommandStructure_AllCommands(t *testing.T) {
+	root := newRootCmd()
 
-	// Verify all queue subcommands exist
-	subcommands := []string{"add", "list", "get", "remove"}
-	foundCount := 0
-
-	for _, sc := range taskCmd.Commands() {
-		for _, expected := range subcommands {
-			if sc.Name() == expected {
-				foundCount++
+	expectedCommands := []string{"clone", "init", "add", "remove", "list", "status", "check", "sync", "prune"}
+	for _, expected := range expectedCommands {
+		found := false
+		for _, cmd := range root.Commands() {
+			if cmd.Name() == expected {
+				found = true
 				break
 			}
 		}
-	}
-
-	if foundCount != len(subcommands) {
-		t.Errorf("Found %d/%d queue subcommands", foundCount, len(subcommands))
-	}
-}
-
-func TestAgentCommandHierarchy(t *testing.T) {
-	taskCmd := newTaskAgentCmd()
-
-	// Verify all agent subcommands exist
-	subcommands := []string{"remove", "list", "check", "sync", "prune", "status"}
-	foundCount := 0
-
-	for _, sc := range taskCmd.Commands() {
-		for _, expected := range subcommands {
-			if sc.Name() == expected {
-				foundCount++
-				break
-			}
+		if !found {
+			t.Errorf("Expected command %q not found in root", expected)
 		}
-	}
-
-	if foundCount != len(subcommands) {
-		t.Errorf("Found %d/%d agent subcommands", foundCount, len(subcommands))
 	}
 }
 

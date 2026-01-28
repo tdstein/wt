@@ -32,9 +32,10 @@ func IsURL(arg string) bool {
 
 // URLToDirname extracts the directory name from a URL
 // Examples:
-//   https://github.com/user/repo.git -> repo
-//   git@github.com:user/repo.git -> repo
-//   https://github.com/user/repo -> repo
+//
+//	https://github.com/user/repo.git -> repo
+//	git@github.com:user/repo.git -> repo
+//	https://github.com/user/repo -> repo
 func URLToDirname(url string) string {
 	var name string
 

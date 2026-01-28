@@ -18,13 +18,12 @@ type Checkpoint struct {
 
 // Metadata represents the JSON metadata for a worktree agent
 type Metadata struct {
-	Agent        string       `json:"agent"`
-	TaskID       string       `json:"task_id"`
-	Branch       string       `json:"branch"`
-	BaseBranch   string       `json:"base_branch"`
-	Created      time.Time    `json:"created"`
-	LastActivity time.Time    `json:"last_activity"`
-	Status       string       `json:"status"`
+	Agent        string    `json:"agent"`
+	Branch       string    `json:"branch"`
+	BaseBranch   string    `json:"base_branch"`
+	Created      time.Time `json:"created"`
+	LastActivity time.Time `json:"last_activity"`
+	Status       string    `json:"status"`
 
 	// Enhanced fields (backwards compatible with omitempty)
 	Progress     int          `json:"progress,omitempty"`      // 0-100 percentage
@@ -62,7 +61,7 @@ func (m *MetadataManager) Init() error {
 }
 
 // Create creates metadata for an agent worktree
-func (m *MetadataManager) Create(agent, taskID, branch, baseBranch string) error {
+func (m *MetadataManager) Create(agent, branch, baseBranch string) error {
 	if err := m.Init(); err != nil {
 		return fmt.Errorf("failed to initialize metadata directory: %w", err)
 	}
@@ -70,7 +69,6 @@ func (m *MetadataManager) Create(agent, taskID, branch, baseBranch string) error
 	now := time.Now().UTC()
 	metadata := Metadata{
 		Agent:        agent,
-		TaskID:       taskID,
 		Branch:       branch,
 		BaseBranch:   baseBranch,
 		Created:      now,
@@ -143,8 +141,6 @@ func (m *MetadataManager) GetField(agent, field string) (string, error) {
 	switch field {
 	case "agent":
 		return metadata.Agent, nil
-	case "task_id":
-		return metadata.TaskID, nil
 	case "branch":
 		return metadata.Branch, nil
 	case "base_branch":

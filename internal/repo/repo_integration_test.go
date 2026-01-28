@@ -6,8 +6,6 @@ import (
 	"testing"
 
 	"github.com/tdstein/wt/internal/agent"
-	"github.com/tdstein/wt/internal/locking"
-	"github.com/tdstein/wt/internal/queue"
 )
 
 // TestSetupLocal_CreatesWtDirectory verifies that SetupLocal creates .wt subdirectories
@@ -20,7 +18,7 @@ func TestSetupLocal_CreatesWtDirectory(t *testing.T) {
 	}
 
 	// Verify .wt subdirectories exist
-	subdirs := []string{"metadata", "queue", "locks"}
+	subdirs := []string{"metadata"}
 	for _, subdir := range subdirs {
 		path := filepath.Join(tmpDir, ".wt", subdir)
 		if _, err := os.Stat(path); os.IsNotExist(err) {
@@ -44,26 +42,12 @@ func TestSetupLocal_ManagersUseWtPaths(t *testing.T) {
 		t.Errorf("MetadataManager.Init() failed: %v", err)
 	}
 
-	// Test QueueManager can initialize with .wt/queue
-	qm := queue.NewManager(tmpDir)
-	if err := qm.Init(); err != nil {
-		t.Errorf("QueueManager.Init() failed: %v", err)
-	}
-
-	// Test LockingManager can initialize with .wt/locks
-	lm := locking.NewManager(tmpDir)
-	if err := lm.Init(); err != nil {
-		t.Errorf("LockingManager.Init() failed: %v", err)
-	}
-
 	// Verify .wt subdirectories exist and are accessible
 	wtPath := filepath.Join(tmpDir, ".wt")
-	for _, subdir := range []string{"metadata", "queue", "locks"} {
+	for _, subdir := range []string{"metadata"} {
 		path := filepath.Join(wtPath, subdir)
 		if _, err := os.Stat(path); os.IsNotExist(err) {
 			t.Errorf("expected directory not found: %s", path)
 		}
 	}
 }
-
-

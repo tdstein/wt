@@ -159,7 +159,7 @@ func (m *Manager) wtStateDir() string {
 
 // EnsureWtStateDir ensures the .wt state directory and subdirectories exist
 func (m *Manager) EnsureWtStateDir() error {
-	subdirs := []string{"metadata", "queue", "locks"}
+	subdirs := []string{"metadata"}
 
 	for _, subdir := range subdirs {
 		dir := filepath.Join(m.wtStateDir(), subdir)

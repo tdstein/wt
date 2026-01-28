@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -118,7 +117,6 @@ func TestManager_Create(t *testing.T) {
 	// Create an agent worktree
 	err := mgr.Create(CreateOptions{
 		AgentName:  "alice",
-		TaskID:     "1234",
 		BaseBranch: "main",
 	})
 
@@ -143,12 +141,8 @@ func TestManager_Create(t *testing.T) {
 		t.Fatalf("Failed to get metadata: %v", err)
 	}
 
-	if metadata.TaskID != "1234" {
-		t.Errorf("metadata.TaskID = %q, want %q", metadata.TaskID, "1234")
-	}
-
-	if metadata.Branch != "task/1234/alice" {
-		t.Errorf("metadata.Branch = %q, want %q", metadata.Branch, "task/1234/alice")
+	if metadata.Branch != "work/alice" {
+		t.Errorf("metadata.Branch = %q, want %q", metadata.Branch, "work/alice")
 	}
 
 	if metadata.BaseBranch != "main" {
@@ -171,19 +165,13 @@ func TestManager_Create_Validation(t *testing.T) {
 	}{
 		{
 			name:    "missing agent name",
-			opts:    CreateOptions{TaskID: "1234"},
-			wantErr: true,
-		},
-		{
-			name:    "missing task ID",
-			opts:    CreateOptions{AgentName: "alice"},
+			opts:    CreateOptions{},
 			wantErr: true,
 		},
 		{
 			name: "invalid agent name",
 			opts: CreateOptions{
 				AgentName: "alice bob",
-				TaskID:    "1234",
 			},
 			wantErr: true,
 		},
@@ -214,7 +202,6 @@ func TestManager_Create_Duplicate(t *testing.T) {
 
 	opts := CreateOptions{
 		AgentName:  "alice",
-		TaskID:     "1234",
 		BaseBranch: "main",
 	}
 
@@ -241,7 +228,6 @@ func TestManager_Remove(t *testing.T) {
 	// Create an agent
 	err := mgr.Create(CreateOptions{
 		AgentName:  "bob",
-		TaskID:     "5678",
 		BaseBranch: "main",
 	})
 	if err != nil {
@@ -294,10 +280,9 @@ func TestManager_List_MultipleAgents(t *testing.T) {
 
 	// Create multiple agents
 	agents := []string{"alice", "bob", "charlie"}
-	for i, agent := range agents {
+	for _, agent := range agents {
 		err := mgr.Create(CreateOptions{
 			AgentName:  agent,
-			TaskID:     fmt.Sprintf("%d", i+1),
 			BaseBranch: "main",
 		})
 		if err != nil {
@@ -347,7 +332,6 @@ func TestManager_Check(t *testing.T) {
 	// Create an agent
 	err := mgr.Create(CreateOptions{
 		AgentName:  "alice",
-		TaskID:     "1234",
 		BaseBranch: "main",
 	})
 	if err != nil {
@@ -393,8 +377,8 @@ func TestManager_GetStatus(t *testing.T) {
 	}
 
 	// Create agents
-	mgr.Create(CreateOptions{AgentName: "alice", TaskID: "1", BaseBranch: "main"})
-	mgr.Create(CreateOptions{AgentName: "bob", TaskID: "2", BaseBranch: "main"})
+	mgr.Create(CreateOptions{AgentName: "alice", BaseBranch: "main"})
+	mgr.Create(CreateOptions{AgentName: "bob", BaseBranch: "main"})
 
 	// Get status again
 	status, err = mgr.GetStatus()
@@ -495,7 +479,6 @@ func TestManager_Sync_WithAutoRebase(t *testing.T) {
 	// Create an agent first
 	err := mgr.Create(CreateOptions{
 		AgentName:  "sync-test",
-		TaskID:     "task-1",
 		BaseBranch: "main",
 	})
 	if err != nil {
@@ -557,7 +540,6 @@ func TestManager_Prune_DryRun(t *testing.T) {
 	// Create an agent
 	err := mgr.Create(CreateOptions{
 		AgentName:  "prune-test",
-		TaskID:     "task-2",
 		BaseBranch: "main",
 	})
 	if err != nil {
@@ -640,7 +622,6 @@ func TestManager_Remove_DeleteBranch(t *testing.T) {
 	// Create an agent
 	err := mgr.Create(CreateOptions{
 		AgentName:  "remove-test",
-		TaskID:     "task-3",
 		BaseBranch: "main",
 	})
 	if err != nil {
@@ -671,7 +652,6 @@ func TestManager_Sync_ResultStructure(t *testing.T) {
 	// Create an agent
 	err := mgr.Create(CreateOptions{
 		AgentName:  "result-test",
-		TaskID:     "task-4",
 		BaseBranch: "main",
 	})
 	if err != nil {

@@ -327,7 +327,7 @@ func TestManager_EnsureWtStateDir(t *testing.T) {
 	}
 
 	// Verify subdirectories exist
-	subdirs := []string{"metadata", "queue", "locks"}
+	subdirs := []string{"metadata"}
 	for _, subdir := range subdirs {
 		path := filepath.Join(mgr.wtStateDir(), subdir)
 		if _, err := os.Stat(path); os.IsNotExist(err) {
@@ -476,7 +476,6 @@ func stringContains(s, substr string) bool {
 	return false
 }
 
-
 // Test Manager_SetupRemote directory creation
 func TestManager_SetupRemote_DirectoryCreation(t *testing.T) {
 	if testing.Short() {
@@ -512,7 +511,7 @@ func TestManager_EnsureWtStateDir_AllSubdirs(t *testing.T) {
 	}
 
 	// Verify all subdirectories exist
-	subdirs := []string{"metadata", "queue", "locks"}
+	subdirs := []string{"metadata"}
 	for _, subdir := range subdirs {
 		path := filepath.Join(mgr.targetPath, ".wt", subdir)
 		if _, err := os.Stat(path); os.IsNotExist(err) {
@@ -664,6 +663,10 @@ func TestManager_CreateLocalWorktree_Creates(t *testing.T) {
 
 	if err := mgr.InitLocalBare(); err != nil {
 		t.Fatalf("InitLocalBare() failed: %v", err)
+	}
+
+	if err := mgr.CreateGitPointer(); err != nil {
+		t.Fatalf("CreateGitPointer() failed: %v", err)
 	}
 
 	if err := mgr.CreateLocalWorktree(); err != nil {

@@ -15,9 +15,9 @@ import (
 
 // Manager handles agent worktree operations
 type Manager struct {
-	targetPath string               // Path to the worktree root
-	metadata   *MetadataManager     // Metadata manager
-	conflict   *conflict.Checker    // Conflict checker
+	targetPath string            // Path to the worktree root
+	metadata   *MetadataManager  // Metadata manager
+	conflict   *conflict.Checker // Conflict checker
 }
 
 // NewAgentManager creates a new agent manager
@@ -44,7 +44,6 @@ func ValidateAgentName(name string) error {
 // CreateOptions contains options for creating an agent worktree
 type CreateOptions struct {
 	AgentName  string
-	TaskID     string
 	BaseBranch string
 }
 
@@ -53,9 +52,6 @@ func (m *Manager) Create(opts CreateOptions) error {
 	// Validate inputs
 	if opts.AgentName == "" {
 		return fmt.Errorf("agent name is required")
-	}
-	if opts.TaskID == "" {
-		return fmt.Errorf("task ID is required")
 	}
 	if opts.BaseBranch == "" {
 		opts.BaseBranch = "main"
@@ -73,8 +69,8 @@ func (m *Manager) Create(opts CreateOptions) error {
 		return fmt.Errorf("worktree already exists: %s", worktreePath)
 	}
 
-	// Create branch name: task/<task-id>/<agent-name>
-	branchName := fmt.Sprintf("task/%s/%s", opts.TaskID, opts.AgentName)
+	// Create branch name: work/<agent-name>
+	branchName := fmt.Sprintf("work/%s", opts.AgentName)
 
 	// Check if branch already exists
 	_, err := git.New("rev-parse", "--verify", branchName).
@@ -96,7 +92,7 @@ func (m *Manager) Create(opts CreateOptions) error {
 		RunSilent() // Ignore errors
 
 	// Create metadata
-	err = m.metadata.Create(opts.AgentName, opts.TaskID, branchName, opts.BaseBranch)
+	err = m.metadata.Create(opts.AgentName, branchName, opts.BaseBranch)
 	if err != nil {
 		// Clean up worktree if metadata creation fails
 		git.New("worktree", "remove", opts.AgentName).
@@ -180,13 +176,12 @@ func (m *Manager) Remove(opts RemoveOptions) error {
 
 // AgentInfo contains information about an agent worktree
 type AgentInfo struct {
-	Agent     string
-	TaskID    string
-	Branch    string
-	Age       int64  // Age in seconds
-	AgeHuman  string
-	Status    string
-	Exists    bool
+	Agent    string
+	Branch   string
+	Age      int64 // Age in seconds
+	AgeHuman string
+	Status   string
+	Exists   bool
 }
 
 // List lists all agent worktrees
@@ -225,7 +220,6 @@ func (m *Manager) List() ([]AgentInfo, error) {
 
 		agents = append(agents, AgentInfo{
 			Agent:    agent,
-			TaskID:   metadata.TaskID,
 			Branch:   metadata.Branch,
 			Age:      age,
 			AgeHuman: ageHuman,
