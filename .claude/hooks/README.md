@@ -2,6 +2,20 @@
 
 This directory contains Claude Code hooks that automatically integrate `wt` into the agent lifecycle, providing isolated worktrees for parallel execution.
 
+## For Developers
+
+**⚠️ Important**: This directory is the **source of truth** for wt hooks. Changes here must be synced to `internal/hooks/templates/` before committing.
+
+### Making Changes
+
+1. Edit hooks in this directory (`.claude/hooks/*.sh` or `.claude/settings.json`)
+2. Test your changes locally
+3. Run `make sync-hooks` to update embedded templates
+4. Run `make test` to verify sync (will fail if out of sync)
+5. Commit both `.claude/` and `internal/hooks/templates/`
+
+The hooks in `internal/hooks/templates/` are embedded in the `wt` binary and distributed to users via `wt hooks install`.
+
 ## Overview
 
 These hooks implement the workspace isolation layer described in the project's CLAUDE.md, ensuring that multiple Claude Code sessions and subagents can work simultaneously without conflicts.

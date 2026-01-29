@@ -108,7 +108,11 @@ wt                                   # Root command
 ├── status                          # Dashboard view
 ├── check <name>                    # Conflict detection
 ├── sync <name>                     # Sync with base branch
-└── prune [--older-than 7d]         # Remove stale agents
+├── prune [--older-than 7d]         # Remove stale agents
+└── hooks                           # Claude Code integration
+    ├── install [dir]               # Install hooks to project
+    ├── config                      # Print settings.json
+    └── list                        # List hook scripts
 ```
 
 ### Package Organization
@@ -119,6 +123,7 @@ wt                                   # Root command
 - `repo/`: Repository setup (bare repo creation, worktree initialization)
 - `conflict/`: Conflict detection via git merge-tree
 - `agent/`: Agent worktree operations and metadata management
+- `hooks/`: Claude Code hooks distribution (embedded templates)
 
 ### Key Design Patterns
 
@@ -195,6 +200,40 @@ func TestAgentCreate(t *testing.T) {
 
 ### Extending Metadata
 The `Metadata` struct in `internal/agent/metadata.go` uses `omitempty` for backwards compatibility. New fields can be added without breaking existing metadata files.
+
+### Maintaining Claude Code Hooks
+
+**Important**: Hook files exist in two locations and must be kept in sync:
+- **Source of truth**: `.claude/hooks/` and `.claude/settings.json`
+- **Distributed templates**: `internal/hooks/templates/` (embedded in binary)
+
+#### Making Changes to Hooks
+
+1. Edit hooks in `.claude/hooks/` or `.claude/settings.json`
+2. Test your changes (run Claude Code with the hooks)
+3. Sync templates: `make sync-hooks`
+4. Verify sync: `make test` (test will fail if out of sync)
+5. Commit both `.claude/` and `internal/hooks/templates/`
+
+#### Automatic Sync Verification
+
+The test `internal/hooks/hooks_test.go` verifies templates match source:
+```bash
+# This will fail if hooks are out of sync
+go test ./internal/hooks/
+
+# Sync and test
+make sync-hooks
+make test
+```
+
+**CI Integration**: The test suite automatically catches divergence, preventing out-of-sync hooks from being merged.
+
+#### Why This Matters
+
+- Users install hooks via `wt hooks install`, which uses embedded templates
+- If templates drift from `.claude/` source, users get outdated hooks
+- The sync test ensures distributed hooks always match development hooks
 
 ## Dependencies
 

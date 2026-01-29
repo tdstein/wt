@@ -35,7 +35,7 @@ LDFLAGS += -X 'main.gitCommit=$(GIT_COMMIT)'
 LDFLAGS += -X 'main.buildTime=$(BUILD_TIME)'
 
 # Phony targets (not actual files)
-.PHONY: all build test install uninstall clean help fmt vet lint
+.PHONY: all build test install uninstall clean help fmt vet lint sync-hooks
 
 # Default target
 all: build
@@ -50,6 +50,7 @@ help:
 	@echo "  make clean            Clean build artifacts"
 	@echo "  make fmt              Format Go code"
 	@echo "  make vet              Run go vet"
+	@echo "  make sync-hooks       Sync .claude/hooks to internal/hooks/templates"
 	@echo "  make help             Show this help"
 	@echo ""
 	@echo "Variables:"
@@ -64,6 +65,7 @@ help:
 	@echo "  sudo make install                # System-wide install"
 	@echo "  make install PREFIX=~/.local     # User install"
 	@echo "  make build VERSION=1.0.0         # Build with version"
+	@echo "  make sync-hooks                  # Sync hooks before committing"
 
 # Build the binary
 build:
@@ -120,6 +122,23 @@ uninstall:
 	@# Remove documentation directory
 	rm -rf $(DESTDIR)$(sharedir)/doc/wt
 	@echo "Uninstallation complete!"
+
+# Sync hooks from .claude/ to internal/hooks/templates/
+sync-hooks:
+	@echo "Syncing hooks from .claude/ to internal/hooks/templates/..."
+	@# Create templates directory if it doesn't exist
+	@mkdir -p internal/hooks/templates/hooks
+	@# Copy settings.json
+	@cp .claude/settings.json internal/hooks/templates/settings.json
+	@# Copy hook scripts
+	@cp .claude/hooks/*.sh internal/hooks/templates/hooks/
+	@echo "✓ Hooks synced successfully"
+	@echo ""
+	@echo "Files synced:"
+	@echo "  .claude/settings.json → internal/hooks/templates/settings.json"
+	@echo "  .claude/hooks/*.sh → internal/hooks/templates/hooks/"
+	@echo ""
+	@echo "Don't forget to commit the changes in internal/hooks/templates/"
 
 # Clean build artifacts
 clean:
