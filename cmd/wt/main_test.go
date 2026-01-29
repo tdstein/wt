@@ -222,8 +222,8 @@ func TestCheckCmd_Basic(t *testing.T) {
 func TestSyncCmd_Basic(t *testing.T) {
 	cmd := newSyncCmd()
 
-	if cmd.Use != "sync <name>" {
-		t.Errorf("Use = %q, want %q", cmd.Use, "sync <name>")
+	if cmd.Use != "sync [name]" {
+		t.Errorf("Use = %q, want %q", cmd.Use, "sync [name]")
 	}
 
 	if cmd.Short != "Synchronize agent with base branch" {
