@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -40,6 +41,7 @@ Manage agent worktrees:
   wt remove <name>                     Remove agent worktree
   wt list                              List all agents
   wt status                            Show agent dashboard
+  wt switch <name>                     Switch to agent worktree
   wt check <name>                      Check for conflicts
   wt sync <name>                       Sync with base branch
   wt prune [--older-than 7d]          Remove stale worktrees`,
@@ -55,6 +57,7 @@ Manage agent worktrees:
 	cmd.AddCommand(newCheckCmd())
 	cmd.AddCommand(newSyncCmd())
 	cmd.AddCommand(newPruneCmd())
+	cmd.AddCommand(newSwitchCmd())
 
 	return cmd
 }
@@ -571,6 +574,74 @@ func newPruneCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Show what would be removed without removing")
 	cmd.Flags().BoolVarP(&interactive, "interactive", "i", false, "Prompt before removing each agent")
 
+	return cmd
+}
+
+// ============================================================================
+// Switch Command - Switch Between Agent Worktrees
+// ============================================================================
+
+func newSwitchCmd() *cobra.Command {
+	var printPath bool
+
+	cmd := &cobra.Command{
+		Use:   "switch <name>",
+		Short: "Switch to an agent worktree",
+		Long: `Switch to an agent worktree by printing the path.
+
+Examples:
+  wt switch alice              Print cd command to switch
+  wt switch alice --path       Print only the path
+  cd $(wt switch alice --path) Use in shell command substitution`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			targetPath, err := findWtRoot()
+			if err != nil {
+				return err
+			}
+
+			mgr := agent.NewAgentManager(targetPath)
+			agentName := args[0]
+
+			// Check if agent exists
+			agents, err := mgr.List()
+			if err != nil {
+				return err
+			}
+
+			var agentInfo *agent.AgentInfo
+			for _, a := range agents {
+				if a.Agent == agentName {
+					agentInfo = &a
+					break
+				}
+			}
+
+			if agentInfo == nil {
+				return fmt.Errorf("agent not found: %s", agentName)
+			}
+
+			if !agentInfo.Exists {
+				return fmt.Errorf("agent worktree does not exist: %s", agentName)
+			}
+
+			worktreePath := filepath.Join(targetPath, agentName)
+
+			// Output format based on flags
+			if printPath {
+				// Just print the path for shell substitution
+				fmt.Println(worktreePath)
+			} else {
+				// Print a friendly message with the cd command
+				logSuccess("To switch to agent '%s', run:", agentName)
+				fmt.Printf("  cd %s\n", worktreePath)
+			}
+
+			return nil
+		},
+	}
+
+	cmd.Flags().BoolVarP(&printPath, "path", "p", false, "Print only the path (for shell substitution)")
 	return cmd
 }
 

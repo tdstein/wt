@@ -176,6 +176,20 @@ wt list
 # - Last activity
 ```
 
+### Switch Between Agents
+```bash
+cd ~/wt/repo/main
+
+# Get path to switch to agent worktree
+wt switch alice
+
+# Use in shell command substitution
+cd $(wt switch alice --path)
+
+# Or just get the path for scripting
+wt switch alice --path
+```
+
 ## Integration Patterns
 
 ### Pattern 1: Skill Initialization
@@ -269,6 +283,7 @@ wt add <name> [base-branch]         # Create agent worktree
 wt remove <name>                    # Remove agent worktree
 wt list                             # List all agents
 wt status                           # Dashboard view
+wt switch <name>                    # Switch to agent worktree
 ```
 
 ### Conflict & Sync

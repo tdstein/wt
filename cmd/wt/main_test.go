@@ -248,6 +248,37 @@ func TestPruneCmd_Basic(t *testing.T) {
 }
 
 // ============================================================================
+// Switch Command Tests
+// ============================================================================
+
+func TestSwitchCmd_Basic(t *testing.T) {
+	cmd := newSwitchCmd()
+
+	if cmd.Use != "switch <name>" {
+		t.Errorf("Use = %q, want %q", cmd.Use, "switch <name>")
+	}
+
+	if cmd.Short != "Switch to an agent worktree" {
+		t.Errorf("Short = %q, want %q", cmd.Short, "Switch to an agent worktree")
+	}
+}
+
+func TestRootCommand_HasSwitchCommand(t *testing.T) {
+	cmd := newRootCmd()
+
+	found := false
+	for _, subcmd := range cmd.Commands() {
+		if subcmd.Name() == "switch" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("switch command not found in root")
+	}
+}
+
+// ============================================================================
 // Context Helper Tests
 // ============================================================================
 
@@ -411,7 +442,7 @@ func TestCommandStructure_RootToAdd(t *testing.T) {
 func TestCommandStructure_AllCommands(t *testing.T) {
 	root := newRootCmd()
 
-	expectedCommands := []string{"clone", "init", "add", "remove", "list", "status", "check", "sync", "prune"}
+	expectedCommands := []string{"clone", "init", "add", "remove", "list", "status", "switch", "check", "sync", "prune"}
 	for _, expected := range expectedCommands {
 		found := false
 		for _, cmd := range root.Commands() {

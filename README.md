@@ -101,6 +101,21 @@ wt list
 # bob                  bob                            2h         active
 ```
 
+### Switching Between Agent Worktrees
+
+```bash
+# Get path to switch to an agent worktree
+wt switch alice
+
+# Use in shell command substitution
+cd $(wt switch alice --path)
+
+# Or just get the path
+wt switch alice --path
+```
+
+The switch command helps you quickly navigate between agent worktrees without typing full paths.
+
 ### Checking Agent Status
 
 ```bash
