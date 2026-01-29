@@ -25,10 +25,20 @@ The tool creates a specific directory layout:
 
 ### Agent Worktrees
 
-Agent worktrees follow a simple naming convention:
-- **Directory**: `<agent-name>/` (e.g., `alice/`, `bob/`)
-- **Branch**: `<agent-name>` (e.g., `alice`, `bob`)
-- **Metadata**: `.wt/metadata/<agent>.json`
+Agent worktrees can be created manually or automatically:
+
+**Manual Creation** (`wt add <name> [base-branch]`):
+- **Directory**: `<name>/` (e.g., `alice/`, `bob/`)
+- **Branch**: `<name>` (e.g., `alice`, `bob`)
+- **Base**: Specified or detected from current context
+- **Metadata**: `.wt/metadata/<name>.json`
+
+**Automatic Creation** (Claude Code hooks):
+- **Directory**: `<agent-type>-<agent-id-short>/` (e.g., `plan-a6c59d07/`)
+- **Branch**: `<agent-type>-<agent-id-short>`
+- **Base**: Current branch (context-aware)
+- **Metadata**: `.wt/metadata/<agent-type>-<agent-id-short>.json`
+- **Isolation**: Based on agent type, keywords, and concurrency
 
 ### Core System
 
@@ -119,10 +129,11 @@ wt                                   # Root command
 
 **Core packages** (internal/):
 - `parse/`: URL and argument parsing (clone vs local detection)
-- `git/`: Git command wrapper with error handling
+- `git/`: Git command wrapper with error handling and upstream tracking
 - `repo/`: Repository setup (bare repo creation, worktree initialization)
 - `conflict/`: Conflict detection via git merge-tree
 - `agent/`: Agent worktree operations and metadata management
+- `worktree/`: Base branch detection and context-aware worktree operations
 - `hooks/`: Claude Code hooks distribution (embedded templates)
 
 ### Key Design Patterns
@@ -139,6 +150,13 @@ wt                                   # Root command
 3. Lists conflicting files without modifying working directory
 4. Updates last_activity timestamp in metadata
 
+**Clone and Upstream Tracking**: When cloning repositories:
+1. Performs bare clone to `.bare/` directory
+2. Fetches remote branches to populate `refs/remotes/origin/*`
+3. Creates primary worktree with upstream tracking configured
+4. Enables push/pull operations without additional configuration
+5. All worktrees automatically track their corresponding remote branches
+
 ### Time-Based Operations
 
 **Age Calculation** (internal/agent/):
@@ -149,10 +167,34 @@ wt                                   # Root command
 ## Important Conventions
 
 ### Branch Naming
-Agent branches are named `<agent-name>`. This is automatically set by the `add` command.
+Agent branches follow these patterns:
+- **Manual**: `<name>` (e.g., `alice`, `feature-work`) - set via `wt add <name>`
+- **Automatic**: `<agent-type>-<agent-id-short>` (e.g., `plan-a6c59d07`) - created by Claude Code hooks
+- Branches are automatically created and managed by the tool
 
 ### Base Branch Detection
-The tool auto-detects the base branch (usually "main" or "master") during repo setup. Agent operations use this for conflict checking and syncing.
+The tool uses **context-aware base branch detection**:
+- During repo setup: Auto-detects the default branch (usually "main" or "master")
+- For agent worktrees: Branches from the current working context (if you're on `feature-x`, agents branch from `feature-x`, not `main`)
+- This enables hierarchical workflows where sub-agents inherit your current branch context
+- Agent operations use the base branch for conflict checking and syncing
+
+### Claude Code Hooks Integration
+
+The tool provides intelligent hooks for automatic agent isolation:
+
+**SubagentStart Hook Decision Logic** (priority order):
+1. **Inline keywords** (highest priority): Agents with "read", "analyze", "explain", "document", "describe", "query", "inspect" work in current directory
+2. **Agent types**: Plan, Explore, Test, Execute, Bash agents get automatic isolation
+3. **Isolation keywords**: Agents with "refactor", "migrate", "scaffold", "restructure", "rebuild", "rewrite" get isolated
+4. **Concurrency**: When 2+ agents are active, new agents get isolated to prevent conflicts
+5. **Default**: Work in current directory (no isolation)
+
+**Worktree Naming**: Auto-generated as `<agent-type>-<agent-id-short>` (e.g., `plan-a6c59d07`)
+
+**Base Branch**: Inherits from current context (dynamic detection)
+
+**SessionStart Hook**: Provides context about wt availability but does not auto-create worktrees. Users work in current directory by default.
 
 ### Context Propagation
 Commands auto-discover the worktree root by searching for `.bare/` directory upwards from current working directory. Commands work from any subdirectory.
