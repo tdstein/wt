@@ -2,7 +2,7 @@
 
 **Vision: Scale AI-assisted development linearly with agent count.**
 
-A CLI tool that manages bare git repositories and coordinates multiple agents working in parallel worktrees with task queues, locks, and automatic conflict detection.
+A CLI tool that manages bare git repositories and enables multiple agents to work in parallel worktrees with automatic conflict detection and workspace isolation.
 
 ## Installation
 
@@ -44,24 +44,26 @@ export PATH="$PATH:$(pwd)/bin"
 ## Usage
 
 ```bash
-# Initialize a new local project
-wt my-project
-
 # Clone from remote repository
-wt https://github.com/user/repo
-wt git@github.com:user/repo.git
+wt clone https://github.com/user/repo
+wt clone git@github.com:user/repo.git
 
 # Clone with custom directory name
-wt https://github.com/user/repo my-custom-name
+wt clone https://github.com/user/repo my-custom-name
+
+# Initialize a new local project
+wt init my-project
 ```
 
 ## Directory Structure
 
 ```
 ~/wt/<project>/
-├── .bare/    # Shared git objects (bare repository)
-├── .git      # Pointer file to .bare
-└── main/     # Primary worktree
+├── .bare/                      # Shared git objects (bare repository)
+├── .wt/                        # Application state directory
+│   └── metadata/               # Agent metadata JSON files
+├── .git                        # Pointer file to .bare
+└── main/                       # Primary worktree
 ```
 
 ## Agent Management Commands
@@ -73,17 +75,17 @@ wt provides built-in commands for managing agent worktrees with automatic metada
 ```bash
 cd ~/wt/my-project
 
-# Create agent worktrees with task IDs
-wt agent create alice 1234 main
-wt agent create bob 5678 main
+# Create agent worktrees
+wt add alice
+wt add bob main  # Optionally specify base branch
 
-# Branch naming convention: task/<task-id>/<agent-name>
-# Creates: task/1234/alice and task/5678/bob
+# Branch naming convention: <agent-name>
+# Creates branches: alice and bob
 ```
 
 Each agent worktree includes:
 - Independent working directory at `~/wt/my-project/<agent-name>/`
-- Dedicated branch following `task/<task-id>/<agent-name>` convention
+- Dedicated branch named `<agent-name>`
 - JSON metadata tracked in `.wt/metadata/<agent>.json`
 - Automatic timestamp tracking for age-based cleanup
 
@@ -91,19 +93,19 @@ Each agent worktree includes:
 
 ```bash
 # View all active agents
-wt agent list
+wt list
 
 # Example output:
-# AGENT                TASK       BRANCH                         AGE        STATUS
-# alice                1234       task/1234/alice                5m         active
-# bob                  5678       task/5678/bob                  2h         active
+# AGENT                BRANCH                         AGE        STATUS
+# alice                alice                          5m         active
+# bob                  bob                            2h         active
 ```
 
 ### Checking Agent Status
 
 ```bash
 # Check merge conflicts and divergence
-wt agent check alice
+wt check alice
 
 # Output includes:
 # - Uncommitted change detection
@@ -115,37 +117,30 @@ wt agent check alice
 ### Syncing with Base Branch
 
 ```bash
-# Check sync status
-wt agent sync alice
-
-# Auto-rebase onto base branch
-wt agent sync alice --auto-rebase
+# Sync with base branch
+wt sync alice
 ```
 
 The sync command:
 - Detects if branch is behind base
-- Requires clean working directory
-- Optionally rebases with `--auto-rebase`
-- Aborts rebase on conflicts
+- Merges base branch into agent branch
+- Shows conflict status if any arise
 
 ### Removing Agent Worktrees
 
 ```bash
-# Remove worktree (keeps branch)
-wt agent remove alice
-
-# Remove worktree and delete merged branch
-wt agent remove alice --delete-branch
+# Remove worktree
+wt remove alice
 ```
 
 ### Pruning Stale Worktrees
 
 ```bash
-# Find worktrees older than 7 days (dry run)
-wt agent prune --dry-run
+# Find and remove worktrees older than 7 days
+wt prune
 
 # Prune with custom age threshold
-wt agent prune --older-than=14d
+wt prune --older-than=14d
 
 # Interactive confirmation for each removal
 ```
@@ -154,13 +149,12 @@ wt agent prune --older-than=14d
 
 ```bash
 # Show comprehensive status
-wt agent status
+wt status
 
 # Displays:
 # - Total worktree count
-# - Active worktree count
 # - Agent list with details
-# - Git worktree list
+# - Age and status information
 ```
 
 ## Manual Worktree Management (Advanced)
@@ -168,13 +162,13 @@ wt agent status
 You can still use git commands directly if needed:
 
 ```bash
-cd ~/wt/my-project
+cd ~/wt/my-project/main
 
 # Manual worktree creation
-git worktree add agent-charlie -b feature-api main
+git worktree add ../agent-charlie -b feature-api
 
 # Manual cleanup
-git worktree remove agent-charlie
+git worktree remove ../agent-charlie
 ```
 
 ## Benefits

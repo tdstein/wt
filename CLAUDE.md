@@ -18,28 +18,23 @@ The tool creates a specific directory layout:
 │   ├── refs/                  # Git references
 │   └── worktrees/             # Git worktree tracking
 ├── .wt/                       # Application state directory
-│   ├── metadata/              # JSON metadata for each agent
-│   ├── queue/                 # Task management (pending/claimed/completed/failed)
-│   └── locks/                 # Task locks for atomic claim/release
+│   └── metadata/              # JSON metadata for each agent
 ├── .git                       # Pointer file to .bare
 └── main/                      # Primary worktree (base branch)
 ```
 
 ### Agent Worktrees
 
-Agent worktrees follow a strict naming convention:
+Agent worktrees follow a simple naming convention:
 - **Directory**: `<agent-name>/` (e.g., `alice/`, `bob/`)
-- **Branch**: `task/<task-id>/<agent-name>` (e.g., `task/1234/alice`)
+- **Branch**: `<agent-name>` (e.g., `alice`, `bob`)
 - **Metadata**: `.wt/metadata/<agent>.json`
 
-### Three Core Systems
+### Core System
 
-1. **Agent Management** (`internal/agent/`): Worktree lifecycle, conflict detection, syncing
-   - Metadata stored in: `.wt/metadata/`
-2. **Task Queue** (`internal/queue/`): Task coordination with priority, dependencies, and state tracking
-   - Queue state stored in: `.wt/queue/`
-3. **Task Locking** (`internal/locking/`): Atomic task claiming with stale lock detection
-   - Locks stored in: `.wt/locks/`
+**Agent Management** (`internal/agent/`): Worktree lifecycle, conflict detection, and syncing
+- Metadata stored in: `.wt/metadata/`
+- Commands: add, remove, list, status, check, sync, prune
 
 ## Development Commands
 
@@ -102,27 +97,18 @@ go test -v -run TestAgentCreate ./internal/agent
 
 ### Command Structure (cmd/wt/main.go)
 
-The CLI is built with Cobra and organized hierarchically:
+The CLI is built with Cobra and organized as flat commands:
 ```
-wt [repo-url|name] [name]           # Root: Setup bare repo
-├── agent                            # Agent worktree management
-│   ├── create <name> <task> [base] # Create agent worktree
-│   ├── remove <name>                # Remove agent worktree
-│   ├── list                         # List all agents
-│   ├── check <name>                 # Conflict detection
-│   ├── sync <name>                  # Sync with base branch
-│   ├── prune                        # Remove stale agents
-│   └── status                       # Dashboard view
-├── queue                            # Task queue management
-│   ├── add <task-id>                # Add task to queue
-│   ├── list                         # List tasks by state
-│   ├── get <task-id>                # Get task details
-│   └── remove <task-id>             # Remove task
-└── lock                             # Task locking
-    ├── claim <task-id> <agent>      # Claim lock
-    ├── release <task-id> <agent>    # Release lock
-    ├── list                         # List active locks
-    └── clean                        # Remove stale locks
+wt                                   # Root command
+├── clone <url> [target-dir]        # Clone repository
+├── init <target-dir>               # Initialize local project
+├── add <name> [base-branch]        # Create agent worktree
+├── remove <name>                   # Remove agent worktree
+├── list                            # List all agents
+├── status                          # Dashboard view
+├── check <name>                    # Conflict detection
+├── sync <name>                     # Sync with base branch
+└── prune [--older-than 7d]         # Remove stale agents
 ```
 
 ### Package Organization
@@ -131,37 +117,19 @@ wt [repo-url|name] [name]           # Root: Setup bare repo
 - `parse/`: URL and argument parsing (clone vs local detection)
 - `git/`: Git command wrapper with error handling
 - `repo/`: Repository setup (bare repo creation, worktree initialization)
-- `conflict/`: Conflict detection via git merge --no-commit --no-ff
+- `conflict/`: Conflict detection via git merge-tree
 - `agent/`: Agent worktree operations and metadata management
-- `queue/`: Task queue with state machine (pending → claimed → completed/failed)
-- `locking/`: Atomic task locks with PID tracking and staleness detection
 
 ### Key Design Patterns
 
 **Metadata-Driven Architecture**: Each agent worktree has JSON metadata tracking:
+- Agent name and branch associations
 - Creation timestamp and last activity
-- Task ID and branch associations
-- Progress percentage and state (claimed, working, testing, blocked, failed, completed)
-- PID for health monitoring
-- Checkpoints for rollback capability
+- Base branch reference
+- Status information
 
-**State-Based Queue System**: Tasks move through directories:
-```
-.wt/queue/
-├── pending/        # Available for claiming
-├── claimed/        # Actively being worked on
-├── completed/      # Successfully finished
-└── failed/         # Failed or abandoned
-```
-
-**Lock-Based Coordination**: Prevents race conditions when multiple agents claim tasks:
-- Atomic claim/release operations
-- Stale lock detection (timeout-based)
-- PID tracking for health checks
-- Force release for cleanup
-
-**Non-Destructive Conflict Detection**: The `agent check` command:
-1. Uses `git merge-tree` or `git merge --no-commit --no-ff` (aborted after check)
+**Non-Destructive Conflict Detection**: The `check` command:
+1. Uses `git merge-tree` for simulation
 2. Reports divergence (commits ahead/behind)
 3. Lists conflicting files without modifying working directory
 4. Updates last_activity timestamp in metadata
@@ -173,26 +141,21 @@ wt [repo-url|name] [name]           # Root: Setup bare repo
 - Human-readable format: "5m", "2h", "3d"
 - Used by `prune` command for cleanup (default: 7 days)
 
-**Lock Staleness** (internal/locking/):
-- Based on `last_active` timestamp
-- Configurable timeout (default: 1 hour)
-- Automatic cleanup via `lock clean` command
-
 ## Important Conventions
 
 ### Branch Naming
-Always follow `task/<task-id>/<agent-name>` convention. This is enforced by `agent create` command.
+Agent branches are named `<agent-name>`. This is automatically set by the `add` command.
 
 ### Base Branch Detection
 The tool auto-detects the base branch (usually "main" or "master") during repo setup. Agent operations use this for conflict checking and syncing.
 
 ### Context Propagation
-Agent commands auto-discover the worktree root by searching for `.bare/` directory upwards from current working directory. Commands work from any subdirectory.
+Commands auto-discover the worktree root by searching for `.bare/` directory upwards from current working directory. Commands work from any subdirectory.
 
 ### Metadata Updates
 The following commands automatically update `last_activity`:
-- `wt agent check <name>`
-- `wt agent sync <name>`
+- `wt check <name>`
+- `wt sync <name>`
 - Manual: Touch metadata via `MetadataManager.UpdateActivity()`
 
 ## Testing Approach
@@ -241,7 +204,7 @@ Minimal external dependencies (see go.mod):
 
 ## Module Path
 
-The Go module path is `github.com/posit-dev/wt`. When importing internal packages:
+The Go module path is `github.com/tdstein/wt`. When importing internal packages:
 ```go
-import "github.com/posit-dev/wt/internal/agent"
+import "github.com/tdstein/wt/internal/agent"
 ```

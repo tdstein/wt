@@ -92,32 +92,22 @@ Standard library where possible. External dependencies only when they provide si
 
 ## Current Capabilities
 
+### Repository Setup
+| Command | Purpose |
+|---------|---------|
+| `wt clone <url> [target-dir]` | Clone repository with bare repo structure |
+| `wt init <target-dir>` | Initialize local project with bare repo structure |
+
 ### Agent Management
 | Command | Purpose |
 |---------|---------|
-| `wt agent create <name> <task> [base]` | Create isolated workspace |
-| `wt agent list` | Show all active agents |
-| `wt agent check <name>` | Detect conflicts non-destructively |
-| `wt agent sync <name>` | Update agent from base branch |
-| `wt agent remove <name>` | Clean up finished work |
-| `wt agent prune` | Remove stale workspaces |
-| `wt agent status` | Dashboard view |
-
-### Task Queue
-| Command | Purpose |
-|---------|---------|
-| `wt queue add <task>` | Add task with priority/dependencies |
-| `wt queue list` | Show tasks by state |
-| `wt queue get <task>` | Task details |
-| `wt queue remove <task>` | Remove task |
-
-### Locking
-| Command | Purpose |
-|---------|---------|
-| `wt lock claim <task> <agent>` | Atomic task claiming |
-| `wt lock release <task> <agent>` | Release claimed task |
-| `wt lock list` | Show active locks |
-| `wt lock clean` | Remove stale locks |
+| `wt add <name> [base-branch]` | Create isolated workspace |
+| `wt list` | Show all active agents |
+| `wt check <name>` | Detect conflicts non-destructively |
+| `wt sync <name>` | Update agent from base branch |
+| `wt remove <name>` | Clean up finished work |
+| `wt prune [--older-than 7d]` | Remove stale workspaces |
+| `wt status` | Dashboard view |
 
 ## Future Directions
 

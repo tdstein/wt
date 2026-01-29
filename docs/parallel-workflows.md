@@ -17,34 +17,34 @@ wt enables multiple agents to work simultaneously by providing:
 
 ```bash
 # Clone an existing repository
-wt https://github.com/user/repo my-project
+wt clone https://github.com/user/repo my-project
 
 # Or initialize a new local project
-wt my-project
+wt init my-project
 
-cd ~/wt/my-project
+cd ~/wt/my-project/main
 ```
 
 ### 2. Create Agent Worktrees
 
 ```bash
 # Create agents for different tasks
-wt agent create alice 1234 main  # Task 1234: Authentication feature
-wt agent create bob 5678 main    # Task 5678: UI improvements
-wt agent create carol 9012 main  # Task 9012: API endpoints
+wt add alice  # Authentication feature
+wt add bob    # UI improvements
+wt add carol  # API endpoints
 
 # Verify creation
-wt agent list
+wt list
 ```
 
 Output:
 ```
 Agent Worktrees:
 
-AGENT                TASK       BRANCH                         AGE        STATUS
-alice                1234       task/1234/alice                1m         active
-bob                  5678       task/5678/bob                  1m         active
-carol                9012       task/9012/carol                1m         active
+AGENT                BRANCH                         AGE        STATUS
+alice                alice                          1m         active
+bob                  bob                            1m         active
+carol                carol                          1m         active
 
 Total: 3 agent(s)
 ```
@@ -77,14 +77,14 @@ git commit -m "Add user endpoints"
 
 ```bash
 # Check each agent for conflicts and divergence
-wt agent check alice
-wt agent check bob
-wt agent check carol
+wt check alice
+wt check bob
+wt check carol
 ```
 
 Example output for Alice:
 ```
-Checking merge: task/1234/alice -> main
+Checking merge: alice -> main
 
 Divergence: 3 commits ahead, 0 commits behind
 
@@ -93,12 +93,12 @@ Divergence: 3 commits ahead, 0 commits behind
 
 Example with conflicts:
 ```
-Checking merge: task/5678/bob -> main
+Checking merge: bob -> main
 
 ⚠️  Warning: Uncommitted changes detected
 
 Divergence: 2 commits ahead, 1 commits behind
-⚠️  Branch is behind main. Consider rebasing.
+⚠️  Branch is behind main. Consider syncing.
 
 ✗ Conflicts detected
 
@@ -112,18 +112,14 @@ Conflicting files:
 If an agent is behind the base branch:
 
 ```bash
-# Check sync status
-wt agent sync alice
-
-# Auto-rebase if there are no conflicts
-wt agent sync alice --auto-rebase
+# Sync with base branch
+wt sync alice
 ```
 
 The sync command:
 - Fetches latest changes from base branch
-- Shows how many commits behind
-- Requires clean working directory
-- Optionally rebases with `--auto-rebase`
+- Merges base branch into agent branch
+- Shows conflict status if any arise
 
 ### 6. Merge to Main
 
@@ -133,9 +129,9 @@ From the main worktree:
 cd ~/wt/my-project/main
 
 # Merge completed work
-git merge task/1234/alice --no-ff
-git merge task/5678/bob --no-ff
-git merge task/9012/carol --no-ff
+git merge alice --no-ff
+git merge bob --no-ff
+git merge carol --no-ff
 
 # Push to remote
 git push origin main
@@ -145,12 +141,12 @@ git push origin main
 
 ```bash
 # Remove agent worktrees
-wt agent remove alice --delete-branch
-wt agent remove bob --delete-branch
-wt agent remove carol --delete-branch
+wt remove alice
+wt remove bob
+wt remove carol
 
 # Verify cleanup
-wt agent list
+wt list
 ```
 
 ## Advanced Workflows
@@ -161,21 +157,23 @@ When conflicts are detected:
 
 1. **Review the conflicts**:
    ```bash
-   wt agent check alice
+   wt check alice
    # Shows: Conflicting files: src/auth/jwt.ts
    ```
 
-2. **Resolve manually**:
+2. **Sync with base branch**:
    ```bash
    cd ~/wt/my-project/alice
-   git rebase main
-   # ... resolve conflicts ...
-   git rebase --continue
+   wt sync alice
+   # Merges main into alice branch
+   # ... resolve conflicts if any ...
+   git add .
+   git commit
    ```
 
 3. **Verify resolution**:
    ```bash
-   wt agent check alice
+   wt check alice
    # Should now show: ✓ Clean merge
    ```
 
@@ -185,14 +183,14 @@ For agents working on extended tasks:
 
 ```bash
 # Regularly sync with base
-wt agent sync alice --auto-rebase
+wt sync alice
 
 # Monitor age
-wt agent list
+wt list
 # AGE column shows: 5m, 2h, 3d, etc.
 
 # Update activity timestamp
-wt agent check alice  # Automatically updates last_activity
+wt check alice  # Automatically updates last_activity
 ```
 
 ### Stale Worktree Cleanup
@@ -200,14 +198,13 @@ wt agent check alice  # Automatically updates last_activity
 Automatically find and remove abandoned worktrees:
 
 ```bash
-# Preview stale worktrees (older than 7 days)
-wt agent prune --dry-run
+# Remove stale worktrees (older than 7 days)
+wt prune
 
 # Use custom threshold
-wt agent prune --older-than=14d --dry-run
+wt prune --older-than=14d
 
-# Remove stale worktrees interactively
-wt agent prune --older-than=7d
+# Interactive confirmation for each removal
 ```
 
 ### Dashboard Monitoring
@@ -215,7 +212,7 @@ wt agent prune --older-than=7d
 Get a comprehensive view:
 
 ```bash
-wt agent status
+wt status
 ```
 
 Output:
@@ -223,48 +220,38 @@ Output:
 === Worktree Status Dashboard ===
 
 Total worktrees: 5
-Active worktrees: 5
 
 Agent Worktrees:
 
-AGENT                TASK       BRANCH                         AGE        STATUS
-alice                1234       task/1234/alice                2h         active
-bob                  5678       task/5678/bob                  1d         active
-carol                9012       task/9012/carol                5m         active
-dave                 3456       task/3456/dave                 8d         active
-eve                  7890       task/7890/eve                  3h         active
+AGENT                BRANCH                         AGE        STATUS
+alice                alice                          2h         active
+bob                  bob                            1d         active
+carol                carol                          5m         active
+dave                 dave                           8d         active
+eve                  eve                            3h         active
 
 Total: 5 agent(s)
-
-Git worktree list:
-/Users/me/wt/my-project/.bare (bare)
-/Users/me/wt/my-project/main  abcd1234 [main]
-/Users/me/wt/my-project/alice ef567890 [task/1234/alice]
-/Users/me/wt/my-project/bob   12345678 [task/5678/bob]
-...
 ```
 
 ## Best Practices
 
-### 1. Use Descriptive Task IDs
+### 1. Use Descriptive Agent Names
 
 ```bash
-# Good: Reference issue/ticket numbers
-wt agent create alice 1234 main     # GitHub issue #1234
-wt agent create bob GH-5678 main    # JIRA ticket GH-5678
-
-# Descriptive names work too
-wt agent create carol auth-feature main
+# Good: Descriptive names that indicate purpose
+wt add auth-feature
+wt add ui-improvements
+wt add api-endpoints
 ```
 
 ### 2. Regular Conflict Checks
 
 ```bash
 # Before committing major changes
-wt agent check alice
+wt check alice
 
 # Before ending work session
-wt agent check alice
+wt check alice
 ```
 
 ### 3. Sync Before Starting New Work
@@ -272,22 +259,22 @@ wt agent check alice
 ```bash
 # Start of work session
 cd ~/wt/my-project/alice
-wt agent sync alice --auto-rebase
+wt sync alice
 ```
 
 ### 4. Clean Up Promptly
 
 ```bash
 # After merging to main
-wt agent remove alice --delete-branch
+wt remove alice
 ```
 
 ### 5. Monitor Dashboard Regularly
 
 ```bash
 # Weekly review
-wt agent status
-wt agent prune --older-than=7d --dry-run
+wt status
+wt prune --older-than=7d
 ```
 
 ## Metadata Structure
@@ -297,8 +284,7 @@ Each agent worktree has metadata stored in `.wt/metadata/<agent>.json`:
 ```json
 {
   "agent": "alice",
-  "task_id": "1234",
-  "branch": "task/1234/alice",
+  "branch": "alice",
   "base_branch": "main",
   "created": "2025-01-25T10:30:00Z",
   "last_activity": "2025-01-25T14:45:00Z",
@@ -308,18 +294,17 @@ Each agent worktree has metadata stored in `.wt/metadata/<agent>.json`:
 
 Fields:
 - **agent**: Agent name (worktree directory name)
-- **task_id**: Associated task/issue identifier
-- **branch**: Full branch name
+- **branch**: Branch name (same as agent name)
 - **base_branch**: Base branch (typically "main")
 - **created**: ISO 8601 timestamp of creation
 - **last_activity**: ISO 8601 timestamp of last check/sync
 - **status**: Current status ("active")
 
 Metadata is automatically updated by:
-- `wt agent create` - Creates initial metadata
-- `wt agent check` - Updates last_activity
-- `wt agent sync` - Updates last_activity
-- `wt agent remove` - Deletes metadata
+- `wt add` - Creates initial metadata
+- `wt check` - Updates last_activity
+- `wt sync` - Updates last_activity
+- `wt remove` - Deletes metadata
 
 ## Troubleshooting
 
@@ -340,19 +325,19 @@ wt agent list  # Works!
 # Commit or stash changes first
 cd ~/wt/my-project/alice
 git stash
-wt agent sync alice --auto-rebase
+wt sync alice
 git stash pop
 ```
 
 ### Branch Already Exists
 
 ```bash
-# Use different agent name or task ID
-wt agent create alice-v2 1234 main
+# Use different agent name
+wt add alice-v2
 
 # Or delete old branch first
-git branch -D task/1234/alice
-wt agent create alice 1234 main
+git branch -D alice
+wt add alice
 ```
 
 ### Worktree Directory Exists
@@ -360,7 +345,7 @@ wt agent create alice 1234 main
 ```bash
 # Remove existing directory
 rm -rf ~/wt/my-project/alice
-wt agent create alice 1234 main
+wt add alice
 ```
 
 ## Integration with Claude Code Skills
@@ -370,9 +355,9 @@ The `/execute` skill can leverage wt for parallel agent workflows:
 ```bash
 # From Claude Code CLI
 /execute
-# Agent creates: wt agent create alice <task-id> main
+# Agent creates: wt add alice
 # Agent works in: ~/wt/project/alice/
-# Agent checks: wt agent check alice
+# Agent checks: wt check alice
 # Agent merges from: ~/wt/project/main/
 ```
 
@@ -382,40 +367,42 @@ Complete example of parallel development:
 
 ```bash
 # Setup
-wt https://github.com/company/app my-app
-cd ~/wt/my-app
+wt clone https://github.com/company/app my-app
+cd ~/wt/my-app/main
 
-# CEO assigns tasks
-wt agent create alice auth main      # Authentication
-wt agent create bob api main         # API layer
-wt agent create carol ui main        # UI components
+# Create agent worktrees
+wt add alice      # Authentication
+wt add bob        # API layer
+wt add carol      # UI components
 
 # Agents work in parallel
 # ... time passes, commits made ...
 
 # Check progress
-wt agent status
+wt status
 
 # Alice finishes first
-wt agent check alice  # Clean merge
-cd main && git merge task/auth/alice --no-ff
-wt agent remove alice --delete-branch
+wt check alice  # Clean merge
+git merge alice --no-ff
+wt remove alice
 
 # Bob needs to sync
-wt agent sync bob --auto-rebase
-wt agent check bob    # Now clean
-cd main && git merge task/api/bob --no-ff
-wt agent remove bob --delete-branch
+wt sync bob
+wt check bob    # Now clean
+git merge bob --no-ff
+wt remove bob
 
 # Carol has conflicts
-wt agent check carol  # Shows conflicts
-cd carol
-git rebase main
+wt check carol  # Shows conflicts
+cd ../carol
+wt sync carol
 # ... resolve conflicts ...
-git rebase --continue
-wt agent check carol  # Now clean
-cd ../main && git merge task/ui/carol --no-ff
-wt agent remove carol --delete-branch
+git add .
+git commit
+cd ../main
+wt check carol  # Now clean
+git merge carol --no-ff
+wt remove carol
 
 # Push final result
 git push origin main
@@ -423,13 +410,14 @@ git push origin main
 
 ## Summary
 
-The wt agent commands provide a complete workflow for parallel agent development:
+The wt commands provide a complete workflow for parallel agent development:
 
-- **Create**: `wt agent create <name> <task> <base>`
-- **Monitor**: `wt agent list`, `wt agent status`
-- **Validate**: `wt agent check <name>`
-- **Sync**: `wt agent sync <name> [--auto-rebase]`
-- **Cleanup**: `wt agent remove <name> [--delete-branch]`
-- **Maintenance**: `wt agent prune [--older-than=Nd]`
+- **Setup**: `wt clone <url> [target-dir]`, `wt init <target-dir>`
+- **Create**: `wt add <name> [base-branch]`
+- **Monitor**: `wt list`, `wt status`
+- **Validate**: `wt check <name>`
+- **Sync**: `wt sync <name>`
+- **Cleanup**: `wt remove <name>`
+- **Maintenance**: `wt prune [--older-than=Nd]`
 
 These commands automate the manual git worktree operations while adding safety checks, metadata tracking, and coordination features.

@@ -80,17 +80,17 @@ After creating agent worktrees:
 # Clone and set up bare repo structure
 wt clone https://github.com/user/repo
 
-# Creates: ~/wt/repo/.bare/ and ~/wt/repo/main/
+# Creates: ~/wt/repo/.bare/, ~/wt/repo/.wt/, and ~/wt/repo/main/
 cd ~/wt/repo/main
 ```
 
 ### Initial Setup (Local Repository)
 ```bash
-# Initialize existing local project
-wt init /path/to/my-project
+# Initialize local project
+wt init my-project
 
-# Creates bare repo structure in place
-cd /path/to/my-project/main
+# Creates bare repo structure
+cd my-project/main
 ```
 
 ### Create Agent Worktree
