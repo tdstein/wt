@@ -14,20 +14,27 @@ A CLI tool that manages bare git repositories and enables multiple agents to wor
 # 1. Install wt (see Installation below)
 sudo make install
 
-# 2. Install Claude Code hooks in your project
-cd ~/my-project
+# 2. Clone or initialize your workspace
+wt clone https://github.com/user/my-repo
+# OR
+wt init my-project
+
+# 3. Install Claude Code hooks
+cd ./my-repo  # or ./my-project
 wt hooks install
 
-# 3. Use Claude Code normally - hooks handle everything automatically
+# 4. Start Claude - hooks handle everything automatically
 claude
 ```
 
 The hooks automatically:
 
-- Create isolated worktrees for each session and subagent
+- Create isolated worktrees for complex agents (Plan, Explore, Test, Execute, Bash)
+- Use intelligent keyword detection to determine when isolation is needed
+- Isolate agents when multiple are running concurrently to prevent conflicts
 - Detect and prevent merge conflicts before they occur
 - Clean up stale worktrees safely
-- Enable multiple agents (Explore, Plan, etc.) to work simultaneously
+- Enable multiple agents to work simultaneously without interference
 
 ### Hook Management Commands
 
