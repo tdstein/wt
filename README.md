@@ -4,6 +4,51 @@
 
 A CLI tool that manages bare git repositories and enables multiple agents to work in parallel worktrees with automatic conflict detection and workspace isolation.
 
+## Claude Code Integration
+
+`wt` integrates seamlessly with [Claude Code](https://claude.ai/code) through automated hooks, enabling true parallel agent execution without manual workspace management.
+
+### Quick Start
+
+```bash
+# 1. Install wt (see Installation below)
+sudo make install
+
+# 2. Install Claude Code hooks in your project
+cd ~/my-project
+wt hooks install
+
+# 3. Use Claude Code normally - hooks handle everything automatically
+claude
+```
+
+The hooks automatically:
+- Create isolated worktrees for each session and subagent
+- Detect and prevent merge conflicts before they occur
+- Clean up stale worktrees safely
+- Enable multiple agents (Explore, Plan, etc.) to work simultaneously
+
+### Hook Management Commands
+
+```bash
+# Install hooks to current project
+wt hooks install
+
+# Install to specific directory
+wt hooks install /path/to/project
+
+# Overwrite existing hooks
+wt hooks install --force
+
+# View configuration
+wt hooks config
+
+# List available scripts
+wt hooks list
+```
+
+📖 See [`.claude/hooks/README.md`](.claude/hooks/README.md) for detailed hook documentation and workflow examples.
+
 ## Installation
 
 ### System-wide Installation (Recommended)

@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/tdstein/wt/internal/agent"
 	"github.com/tdstein/wt/internal/check"
+	"github.com/tdstein/wt/internal/hooks"
 	"github.com/tdstein/wt/internal/prune"
 	"github.com/tdstein/wt/internal/worktree"
 )
@@ -44,7 +45,12 @@ Manage agent worktrees:
   wt switch <name>                     Switch to agent worktree
   wt check <name>                      Check for conflicts
   wt sync <name>                       Sync with base branch
-  wt prune [--older-than 7d]          Remove stale worktrees`,
+  wt prune [--older-than 7d]          Remove stale worktrees
+
+Claude Code integration:
+  wt hooks install                     Install Claude Code hooks
+  wt hooks config                      Print hooks configuration
+  wt hooks list                        List available hook scripts`,
 		Version: version,
 	}
 
@@ -58,6 +64,7 @@ Manage agent worktrees:
 	cmd.AddCommand(newSyncCmd())
 	cmd.AddCommand(newPruneCmd())
 	cmd.AddCommand(newSwitchCmd())
+	cmd.AddCommand(newHooksCmd())
 
 	return cmd
 }
@@ -643,6 +650,114 @@ Examples:
 
 	cmd.Flags().BoolVarP(&printPath, "path", "p", false, "Print only the path (for shell substitution)")
 	return cmd
+}
+
+// ============================================================================
+// Hooks Command - Claude Code Integration
+// ============================================================================
+
+func newHooksCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "hooks",
+		Short: "Manage Claude Code hooks for wt integration",
+		Long: `Install or view Claude Code hooks that automatically integrate wt
+into the agent lifecycle.
+
+These hooks enable:
+- Automatic worktree creation for sessions and subagents
+- Conflict detection and prevention
+- Safe cleanup of stale worktrees
+- True parallel agent execution
+
+Subcommands:
+  wt hooks install          Install hooks to current project
+  wt hooks config           Print settings.json configuration
+  wt hooks list             List available hook scripts`,
+	}
+
+	cmd.AddCommand(newHooksInstallCmd())
+	cmd.AddCommand(newHooksConfigCmd())
+	cmd.AddCommand(newHooksListCmd())
+
+	return cmd
+}
+
+func newHooksInstallCmd() *cobra.Command {
+	var force bool
+
+	cmd := &cobra.Command{
+		Use:   "install [target-dir]",
+		Short: "Install Claude Code hooks to a project",
+		Long: `Install Claude Code hooks to the specified directory (or current directory).
+
+This creates:
+  .claude/settings.json      Hook configuration
+  .claude/hooks/*.sh         Hook scripts
+
+The hooks automatically integrate wt with Claude Code, enabling parallel
+agent execution without manual workspace management.`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			targetDir := "."
+			if len(args) > 0 {
+				targetDir = args[0]
+			}
+
+			// Convert to absolute path
+			absPath, err := filepath.Abs(targetDir)
+			if err != nil {
+				return fmt.Errorf("failed to resolve target directory: %w", err)
+			}
+
+			// Check if directory exists
+			if _, err := os.Stat(absPath); os.IsNotExist(err) {
+				return fmt.Errorf("target directory does not exist: %s", absPath)
+			}
+
+			// Install hooks
+			if force {
+				return hooks.InstallWithForce(absPath)
+			}
+			return hooks.Install(absPath)
+		},
+	}
+
+	cmd.Flags().BoolVarP(&force, "force", "f", false, "Overwrite existing hook files")
+	return cmd
+}
+
+func newHooksConfigCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "config",
+		Short: "Print settings.json configuration",
+		Long: `Print the Claude Code settings.json configuration for wt hooks.
+
+You can use this to manually add hooks to your project:
+  wt hooks config > .claude/settings.json`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return hooks.PrintConfig()
+		},
+	}
+}
+
+func newHooksListCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "list",
+		Short: "List available hook scripts",
+		Long:  `List all available Claude Code hook scripts that can be installed.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			scripts, err := hooks.ListScripts()
+			if err != nil {
+				return err
+			}
+
+			fmt.Println("Available hook scripts:")
+			for _, script := range scripts {
+				fmt.Printf("  - %s\n", script)
+			}
+			return nil
+		},
+	}
 }
 
 func formatDuration(d time.Duration) string {
