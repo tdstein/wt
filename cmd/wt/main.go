@@ -137,9 +137,16 @@ func runClone(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 	logSuccess("Worktree ready: %s", result.TargetPath)
 	fmt.Println()
-	fmt.Println("Create agent worktrees:")
-	fmt.Printf("  cd %s\n", result.TargetPath)
-	fmt.Println("  wt add <agent-name> [base-branch]")
+	fmt.Println("Next steps:")
+	fmt.Println()
+	fmt.Println("1. Navigate to the repository:")
+	fmt.Printf("   cd %s\n", result.TargetPath)
+	fmt.Println()
+	fmt.Println("2. Set up Claude Code hooks (recommended):")
+	fmt.Println("   wt hooks install")
+	fmt.Println()
+	fmt.Println("3. Create agent worktrees:")
+	fmt.Println("   wt add <agent-name> [base-branch]")
 
 	return nil
 }
@@ -207,9 +214,16 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 	logSuccess("Worktree ready: %s", result.TargetPath)
 	fmt.Println()
-	fmt.Println("Create agent worktrees:")
-	fmt.Printf("  cd %s\n", result.TargetPath)
-	fmt.Println("  wt add <agent-name> [base-branch]")
+	fmt.Println("Next steps:")
+	fmt.Println()
+	fmt.Println("1. Navigate to the repository:")
+	fmt.Printf("   cd %s\n", result.TargetPath)
+	fmt.Println()
+	fmt.Println("2. Set up Claude Code hooks (recommended):")
+	fmt.Println("   wt hooks install")
+	fmt.Println()
+	fmt.Println("3. Create agent worktrees:")
+	fmt.Println("   wt add <agent-name> [base-branch]")
 
 	return nil
 }
