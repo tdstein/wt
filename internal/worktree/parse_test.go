@@ -61,10 +61,24 @@ func TestURLToDirname(t *testing.T) {
 }
 
 func TestParseArgs(t *testing.T) {
-	// Save and restore HOME
-	originalHome := os.Getenv("HOME")
-	defer os.Setenv("HOME", originalHome)
-	os.Setenv("HOME", "/home/testuser")
+	// Create temp directory and change to it for testing
+	tmpDir := t.TempDir()
+
+	// Resolve symlinks (for macOS /var -> /private/var)
+	tmpDir, err := filepath.EvalSymlinks(tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	originalWd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(originalWd)
+
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatal(err)
+	}
 
 	tests := []struct {
 		name      string
@@ -81,7 +95,7 @@ func TestParseArgs(t *testing.T) {
 			wantMode:  "remote",
 			wantURL:   "https://github.com/user/repo.git",
 			wantDir:   "repo",
-			wantPath:  "/home/testuser/wt/repo",
+			wantPath:  filepath.Join(tmpDir, "repo"),
 			wantError: false,
 		},
 		{
@@ -90,7 +104,7 @@ func TestParseArgs(t *testing.T) {
 			wantMode:  "remote",
 			wantURL:   "https://github.com/user/repo.git",
 			wantDir:   "mydir",
-			wantPath:  "/home/testuser/wt/mydir",
+			wantPath:  filepath.Join(tmpDir, "mydir"),
 			wantError: false,
 		},
 		{
@@ -99,7 +113,7 @@ func TestParseArgs(t *testing.T) {
 			wantMode:  "remote",
 			wantURL:   "git@github.com:user/repo.git",
 			wantDir:   "repo",
-			wantPath:  "/home/testuser/wt/repo",
+			wantPath:  filepath.Join(tmpDir, "repo"),
 			wantError: false,
 		},
 		{
@@ -108,7 +122,16 @@ func TestParseArgs(t *testing.T) {
 			wantMode:  "local",
 			wantURL:   "",
 			wantDir:   "my-project",
-			wantPath:  "/home/testuser/wt/my-project",
+			wantPath:  filepath.Join(tmpDir, "my-project"),
+			wantError: false,
+		},
+		{
+			name:      "absolute path",
+			args:      []string{"https://github.com/user/repo.git", "/tmp/custom"},
+			wantMode:  "remote",
+			wantURL:   "https://github.com/user/repo.git",
+			wantDir:   "/tmp/custom",
+			wantPath:  "/tmp/custom",
 			wantError: false,
 		},
 		{
@@ -155,15 +178,15 @@ func TestParseArgs(t *testing.T) {
 	}
 }
 
-func TestParseArgsRealHome(t *testing.T) {
-	// Test with real HOME directory
+func TestParseArgsRealCwd(t *testing.T) {
+	// Test with real current working directory
 	result, err := ParseArgs([]string{"test-project"})
 	if err != nil {
 		t.Fatalf("ParseArgs failed: %v", err)
 	}
 
-	homeDir, _ := os.UserHomeDir()
-	expectedPath := filepath.Join(homeDir, "wt", "test-project")
+	cwd, _ := os.Getwd()
+	expectedPath := filepath.Join(cwd, "test-project")
 
 	if result.TargetPath != expectedPath {
 		t.Errorf("TargetPath = %q, want %q", result.TargetPath, expectedPath)

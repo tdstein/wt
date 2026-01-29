@@ -11,8 +11,8 @@ import (
 type ParseResult struct {
 	Mode       string // "remote" or "local"
 	RepoURL    string // URL if remote, empty if local
-	DirName    string // Directory name
-	TargetPath string // Full path: $HOME/wt/$DirName
+	DirName    string // Directory name (relative or absolute)
+	TargetPath string // Full path: absolute path or $CWD/$DirName
 }
 
 // IsURL checks if the argument looks like a URL
@@ -93,13 +93,21 @@ func ParseArgs(args []string) (*ParseResult, error) {
 		result.DirName = arg1
 	}
 
-	// Get HOME directory
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get home directory: %w", err)
+	// Determine target path based on directory name
+	var targetPath string
+	if filepath.IsAbs(result.DirName) {
+		// Use absolute path as-is
+		targetPath = result.DirName
+	} else {
+		// Join relative path with current working directory
+		cwd, err := os.Getwd()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get current directory: %w", err)
+		}
+		targetPath = filepath.Join(cwd, result.DirName)
 	}
 
-	result.TargetPath = filepath.Join(homeDir, "wt", result.DirName)
+	result.TargetPath = targetPath
 
 	return result, nil
 }
