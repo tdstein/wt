@@ -134,6 +134,12 @@ func (m *Manager) CreateRemoteWorktree(branch string) error {
 	if err := git.WorktreeAdd(m.targetPath, "main", branch, false); err != nil {
 		return fmt.Errorf("failed to add worktree: %w", err)
 	}
+
+	// Set upstream branch for push/pull operations
+	if err := git.SetUpstream(m.mainPath(), branch, "origin", branch); err != nil {
+		return fmt.Errorf("failed to set upstream: %w", err)
+	}
+
 	return nil
 }
 

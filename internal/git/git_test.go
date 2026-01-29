@@ -252,6 +252,70 @@ func TestCommit(t *testing.T) {
 	}
 }
 
+func TestSetUpstream(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping git operation test in short mode")
+	}
+
+	tempDir, err := os.MkdirTemp("", "git-test-")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create a bare repository (simulating origin)
+	bareDir := filepath.Join(tempDir, "origin.git")
+	if err := Init(bareDir, true); err != nil {
+		t.Fatalf("Init(bare) failed: %v", err)
+	}
+
+	// Set symbolic ref for bare repo
+	if err := SymbolicRef(bareDir, "HEAD", "refs/heads/main"); err != nil {
+		t.Fatalf("SymbolicRef() failed: %v", err)
+	}
+
+	// Clone the bare repository
+	cloneDir := filepath.Join(tempDir, "clone")
+	if err := Clone(bareDir, cloneDir, false); err != nil {
+		t.Fatalf("Clone() failed: %v", err)
+	}
+
+	// Create an initial commit
+	if err := Commit(cloneDir, "Initial commit", true); err != nil {
+		t.Fatalf("Commit() failed: %v", err)
+	}
+
+	// Push to origin to create the remote tracking branch
+	if err := New("push", "-u", "origin", "main").WithDir(cloneDir).RunSilent(); err != nil {
+		t.Fatalf("Push failed: %v", err)
+	}
+
+	// Set upstream tracking (this should work now)
+	if err := SetUpstream(cloneDir, "main", "origin", "main"); err != nil {
+		t.Fatalf("SetUpstream() failed: %v", err)
+	}
+
+	// Verify upstream was set by checking branch configuration
+	output, err := New("config", "branch.main.remote").WithDir(cloneDir).Run()
+	if err != nil {
+		t.Fatalf("Failed to read branch.main.remote: %v", err)
+	}
+
+	if output != "origin" {
+		t.Errorf("branch.main.remote = %q, want %q", output, "origin")
+	}
+
+	// Verify merge configuration
+	output, err = New("config", "branch.main.merge").WithDir(cloneDir).Run()
+	if err != nil {
+		t.Fatalf("Failed to read branch.main.merge: %v", err)
+	}
+
+	if output != "refs/heads/main" {
+		t.Errorf("branch.main.merge = %q, want %q", output, "refs/heads/main")
+	}
+}
+
 // Helper function
 func contains(s, substr string) bool {
 	if len(s) < len(substr) {
