@@ -34,17 +34,31 @@ allowed-tools: Bash(wt *)
 
 ## When to Use This Skill
 
-### Recommended Usage
-Use `wt` to create isolated worktrees when:
-1. Working on complex, multi-file changes that require isolation
-2. Multiple agents need to work simultaneously without conflicts
-3. Long-horizon tasks that need dedicated workspace
-4. Planning or exploration work that modifies many files
+### Automatic Isolation
+The SubagentStart hook automatically creates isolated worktrees based on:
 
-### Default Behavior
-- **Main sessions**: Work in current worktree (usually `main/`)
-- **Quick tasks**: Stay in current directory for speed and simplicity
-- **Complex tasks**: Create isolated worktrees explicitly with `wt add <name>`
+**Agent Type** (Plan, Explore, Test, Execute, Bash)
+- These agent types always get isolated worktrees
+- Isolation ensures complex operations don't interfere with main work
+
+**Isolation Keywords** (in agent_type field)
+- Keywords: refactor, migrate, scaffold, restructure, rebuild, rewrite
+- Triggers worktree creation for large-scale modifications
+
+**Inline Keywords** (override isolation)
+- Keywords: read, analyze, explain, document, describe, query, inspect
+- Forces agent to work in current directory for read-only tasks
+
+**Concurrency Threshold**
+- When 2+ agents are already active, new agents get isolated
+- Prevents conflicts during parallel execution
+
+### Manual Worktree Creation
+Use `wt add <name>` explicitly when:
+1. You need a dedicated workspace outside automatic rules
+2. Working on long-horizon feature development
+3. Creating multiple parallel workspaces for coordination
+4. Testing changes that require full isolation
 
 ### Dynamic Base Branch
 - Worktrees automatically use your **current branch** as the base
@@ -277,15 +291,18 @@ wt add charlie
 
 ### Pattern 3: Autonomous Coordination
 ```bash
-# Plan and Explore agents get automatic worktrees and merge-back
-# Example: User spawns Plan agent
+# Agents get automatic worktrees based on dynamic decision logic
+# Example: User spawns Plan agent or uses isolation keywords
 
 # 1. SubagentStart hook automatically:
-#    - Detects agent type (Plan)
-#    - Creates worktree with current branch as base
-#    - Agent works in isolation
+#    - Evaluates agent_type against decision criteria
+#    - Priority 1: Inline keywords → work in current directory
+#    - Priority 2: Agent type (Plan/Explore/Test/Execute/Bash) → isolate
+#    - Priority 3: Isolation keywords (refactor/migrate/etc.) → isolate
+#    - Priority 4: Concurrency (2+ active agents) → isolate
+#    - Creates worktree with current branch as base (if isolation triggered)
 
-# 2. Agent does planning work in isolated worktree
+# 2. Agent does work in isolated worktree (or current directory)
 
 # 3. SubagentStop hook automatically:
 #    - Checks for conflicts
@@ -294,6 +311,12 @@ wt add charlie
 #    - All without user intervention
 
 # User sees: "✓ Auto-merged plan-<id> → main and cleaned up worktree"
+
+# Examples of automatic decisions:
+# - "Plan" agent → Isolated (agent type)
+# - "RefactorAuth" → Isolated (keyword: refactor)
+# - "ReadDocs" → Inline (keyword: read)
+# - "ImplementFeature" with 2+ agents active → Isolated (concurrency)
 ```
 
 ### Pattern 4: Manual Merging (When Conflicts Exist)
@@ -324,10 +347,10 @@ wt remove alice
 - **Keep it simple**: Short, lowercase, hyphen-separated names
 
 ### Workflow Guidelines
-1. **Default to current worktree**: Work in your current directory for most tasks
-2. **Create worktrees selectively**: Only for complex, multi-file, or long-horizon work
+1. **Trust automatic isolation**: SubagentStart hook intelligently decides based on agent type, keywords, and concurrency
+2. **Use descriptive agent names**: Keywords in agent_type trigger isolation (e.g., "RefactorAuth", "MigrateDB")
 3. **Base branch is dynamic**: New worktrees branch from your current context, not always `main`
-4. **Plan/Explore auto-isolate**: These agents automatically get worktrees and merge back
+4. **Explicit control when needed**: Use `wt add` for manual worktree creation outside automatic rules
 5. **Check before manual merge**: Run `wt check` before merging work manually
 6. **Clean up**: Remove worktrees when done (`wt remove` or `wt prune`)
 

@@ -51,18 +51,53 @@ Creates an isolated worktree for each Claude Code session.
 ### `subagent-start.sh` (SubagentStart Hook)
 **Trigger**: When Claude spawns a subagent (Task tool)
 
-Creates isolated worktrees for parallel subagent execution.
+Creates isolated worktrees for parallel subagent execution based on dynamic decision logic.
+
+**Decision Logic** (evaluated in priority order):
+
+1. **Priority 1: Inline Keywords** (work in current directory)
+   - Keywords: `read`, `analyze`, `explain`, `document`, `describe`, `query`, `inspect`
+   - Example: `agent_type: "ReadDocs"` → Works inline
+   - Logs: `"Inline execution: matched keyword 'read'"`
+
+2. **Priority 2: Agent Type** (create isolated worktree)
+   - Types: `Plan`, `Explore`, `Test`, `Execute`, `Bash`
+   - Example: `agent_type: "Plan"` → Creates isolated worktree
+   - Logs: `"Isolation: agent type 'Plan'"`
+
+3. **Priority 3: Isolation Keywords** (create isolated worktree)
+   - Keywords: `refactor`, `migrate`, `scaffold`, `restructure`, `rebuild`, `rewrite`
+   - Example: `agent_type: "RefactorAuth"` → Creates isolated worktree
+   - Logs: `"Isolation: matched keyword 'refactor'"`
+
+4. **Priority 4: Concurrency** (create isolated worktree if 2+ agents active)
+   - Counts active agents in `.wt/metadata/*.json`
+   - Example: With 2+ agents, `agent_type: "Generic"` → Creates isolated worktree
+   - Logs: `"Isolation: concurrency (3 active agents)"`
+
+5. **Default**: Work in current directory
 
 **Behavior**:
 - Generates worktree name: `<agent-type>-<agent-id>`
-- Creates worktree for the subagent
+- Creates worktree if decision logic triggers isolation
 - Allows multiple subagents to work in parallel
 - Fails silently if worktree creation fails (subagent uses current directory)
+
+**Decision Examples**:
+
+| Agent Type | Decision | Reason |
+|------------|----------|--------|
+| `Plan` | Isolate | Agent type match |
+| `Test` | Isolate | Agent type match |
+| `RefactorAuth` | Isolate | Keyword: "refactor" |
+| `ReadDocs` | Inline | Keyword: "read" |
+| `ImplementFeature` (2+ agents) | Isolate | Concurrency |
+| `ImplementFeature` (0-1 agents) | Inline | Default |
 
 **Worktree Naming Examples**:
 - Explore agent: `explore-abc12345/`
 - Plan agent: `plan-def67890/`
-- Bash agent: `bash-ghi24680/`
+- Refactor agent: `refactorauth-ghi24680/`
 
 ### `subagent-stop.sh` (SubagentStop Hook)
 **Trigger**: When a subagent completes its work

@@ -20,16 +20,71 @@ if [ ! -d ".bare" ] || [ ! -d ".wt" ]; then
     exit 0
 fi
 
-# Filter: Only create worktrees for Plan and Explore agents
-case "$AGENT_TYPE" in
-  Plan|Explore)
-    # These agents benefit from isolation
-    ;;
-  *)
-    # All other agents work in current directory
+# Helper: Check if agent_type contains any keywords
+contains_keyword() {
+    local text="$1"
+    shift
+    local keywords=("$@")
+    local text_lower=$(echo "$text" | tr '[:upper:]' '[:lower:]')
+
+    for keyword in "${keywords[@]}"; do
+        if echo "$text_lower" | grep -q "$keyword"; then
+            echo "$keyword"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Helper: Count active agents
+count_active_agents() {
+    if [ ! -d ".wt/metadata" ]; then
+        echo 0
+        return
+    fi
+    ls -1 .wt/metadata/*.json 2>/dev/null | wc -l | tr -d ' '
+}
+
+# Decision logic: Determine if this agent needs isolation
+CREATE_WORKTREE=false
+
+# Priority 1: Check for inline keywords (override isolation)
+INLINE_KEYWORDS=("read" "analyze" "explain" "document" "describe" "query" "inspect")
+if MATCHED=$(contains_keyword "$AGENT_TYPE" "${INLINE_KEYWORDS[@]}"); then
+    echo "Inline execution: matched keyword '$MATCHED'" >&2
     exit 0
+fi
+
+# Priority 2: Check agent type
+case "$AGENT_TYPE" in
+  Plan|Explore|Test|Execute|Bash)
+    CREATE_WORKTREE=true
+    echo "Isolation: agent type '$AGENT_TYPE'" >&2
     ;;
 esac
+
+# Priority 3: Check for isolation keywords
+if [ "$CREATE_WORKTREE" != "true" ]; then
+    ISOLATION_KEYWORDS=("refactor" "migrate" "scaffold" "restructure" "rebuild" "rewrite")
+    if MATCHED=$(contains_keyword "$AGENT_TYPE" "${ISOLATION_KEYWORDS[@]}"); then
+        CREATE_WORKTREE=true
+        echo "Isolation: matched keyword '$MATCHED'" >&2
+    fi
+fi
+
+# Priority 4: Check concurrency
+if [ "$CREATE_WORKTREE" != "true" ]; then
+    ACTIVE_AGENTS=$(count_active_agents)
+    if [ "$ACTIVE_AGENTS" -ge 2 ]; then
+        CREATE_WORKTREE=true
+        echo "Isolation: concurrency (${ACTIVE_AGENTS} active agents)" >&2
+    fi
+fi
+
+# Exit if no isolation needed
+if [ "$CREATE_WORKTREE" != "true" ]; then
+    exit 0
+fi
 
 # Generate worktree name based on agent type and ID
 # Format: <agent-type>-<agent-id-short>
