@@ -1,11 +1,11 @@
-package repo
+package worktree
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/tdstein/wt/internal/agent"
+	"github.com/tdstein/wt/internal/metadata"
 )
 
 // TestSetupLocal_CreatesWtDirectory verifies that SetupLocal creates .wt subdirectories
@@ -37,7 +37,7 @@ func TestSetupLocal_ManagersUseWtPaths(t *testing.T) {
 	}
 
 	// Test MetadataManager can initialize with .wt/metadata
-	mm := agent.NewMetadataManager(tmpDir)
+	mm := metadata.NewMetadataManager(tmpDir)
 	if err := mm.Init(); err != nil {
 		t.Errorf("MetadataManager.Init() failed: %v", err)
 	}

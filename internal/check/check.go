@@ -1,4 +1,4 @@
-package conflict
+package check
 
 import (
 	"fmt"
@@ -10,7 +10,7 @@ import (
 	"github.com/tdstein/wt/internal/git"
 )
 
-// Checker handles conflict detection and branch synchronization
+// Checker handles conflict detection
 type Checker struct {
 	targetPath string // Path to the worktree root (e.g., ~/wt/my-project)
 }
@@ -26,8 +26,8 @@ type Divergence struct {
 	Behind int
 }
 
-// ConflictCheckResult contains the results of a conflict check
-type ConflictCheckResult struct {
+// Result contains the results of a conflict check
+type Result struct {
 	HasConflicts     bool
 	HasChanges       bool
 	Divergence       Divergence
@@ -172,92 +172,8 @@ func (c *Checker) GetCurrentBranch(worktreePath string) (string, error) {
 	return strings.TrimSpace(branch), nil
 }
 
-// SyncOptions contains options for syncing a worktree
-type SyncOptions struct {
-	AutoRebase bool
-}
-
-// SyncResult contains the result of a sync operation
-type SyncResult struct {
-	AlreadyUpToDate bool
-	Divergence      Divergence
-	Rebased         bool
-	Error           error
-}
-
-// Sync synchronizes a worktree with its base branch
-func (c *Checker) Sync(agentName, baseBranch string, opts SyncOptions) (*SyncResult, error) {
-	worktreePath := filepath.Join(c.targetPath, agentName)
-
-	// Get current branch
-	currentBranch, err := c.GetCurrentBranch(worktreePath)
-	if err != nil {
-		return nil, err
-	}
-
-	// Fetch latest from origin
-	git.New("fetch", "origin", baseBranch).
-		WithDir(c.targetPath).
-		RunSilent() // Ignore errors from fetch
-
-	// Get divergence
-	divergence, err := c.GetDivergence(baseBranch, currentBranch)
-	if err != nil {
-		return nil, err
-	}
-
-	// Already up to date
-	if divergence.Behind == 0 {
-		return &SyncResult{
-			AlreadyUpToDate: true,
-			Divergence:      divergence,
-		}, nil
-	}
-
-	// Check for uncommitted changes
-	hasChanges, err := c.HasUncommittedChanges(worktreePath)
-	if err != nil {
-		return nil, err
-	}
-
-	if hasChanges {
-		return &SyncResult{
-			Divergence: divergence,
-			Error:      fmt.Errorf("uncommitted changes detected, commit or stash before syncing"),
-		}, nil
-	}
-
-	// Auto-rebase if requested
-	if opts.AutoRebase {
-		err := git.New("rebase", baseBranch).
-			WithDir(worktreePath).
-			RunSilent()
-
-		if err != nil {
-			// Abort rebase on failure
-			git.New("rebase", "--abort").
-				WithDir(worktreePath).
-				RunSilent()
-
-			return &SyncResult{
-				Divergence: divergence,
-				Error:      fmt.Errorf("rebase failed: %w", err),
-			}, nil
-		}
-
-		return &SyncResult{
-			Divergence: divergence,
-			Rebased:    true,
-		}, nil
-	}
-
-	return &SyncResult{
-		Divergence: divergence,
-	}, nil
-}
-
 // Check performs a comprehensive conflict check for an agent worktree
-func (c *Checker) Check(agentName, baseBranch string) (*ConflictCheckResult, error) {
+func (c *Checker) Check(agentName, baseBranch string) (*Result, error) {
 	worktreePath := filepath.Join(c.targetPath, agentName)
 
 	// Get current branch
@@ -284,7 +200,7 @@ func (c *Checker) Check(agentName, baseBranch string) (*ConflictCheckResult, err
 		return nil, err
 	}
 
-	result := &ConflictCheckResult{
+	result := &Result{
 		HasConflicts: !canMerge,
 		HasChanges:   hasChanges,
 		Divergence:   divergence,

@@ -82,7 +82,7 @@ func setupTestAgentManager(t *testing.T) (*Manager, string, string) {
 		t.Fatalf("Failed to create initial commit: %v", err)
 	}
 
-	mgr := NewAgentManager(projectPath)
+	mgr := NewManager(projectPath)
 	return mgr, tempDir, projectPath
 }
 
@@ -91,8 +91,8 @@ func cleanupTestAgentManager(t *testing.T, tempDir string) {
 	os.RemoveAll(tempDir)
 }
 
-func TestNewAgentManager(t *testing.T) {
-	mgr := NewAgentManager("/home/user/wt/test-project")
+func TestNewManager(t *testing.T) {
+	mgr := NewManager("/home/user/wt/test-project")
 
 	if mgr.targetPath != "/home/user/wt/test-project" {
 		t.Errorf("targetPath = %q, want %q", mgr.targetPath, "/home/user/wt/test-project")
@@ -102,7 +102,7 @@ func TestNewAgentManager(t *testing.T) {
 		t.Error("metadata manager is nil")
 	}
 
-	if mgr.conflict == nil {
+	if mgr.checker == nil {
 		t.Error("conflict checker is nil")
 	}
 }
@@ -396,44 +396,6 @@ func TestManager_GetStatus(t *testing.T) {
 	}
 }
 
-func TestParseOlderThan(t *testing.T) {
-	tests := []struct {
-		name      string
-		arg       string
-		want      int
-		wantError bool
-	}{
-		{"7 days", "7d", 7, false},
-		{"14 days", "14d", 14, false},
-		{"without d suffix", "30", 30, false},
-		{"zero", "0d", 0, false},
-		{"invalid", "abc", 0, true},
-		{"negative", "-5d", 0, true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := ParseOlderThan(tt.arg)
-
-			if tt.wantError {
-				if err == nil {
-					t.Errorf("ParseOlderThan(%q) expected error, got nil", tt.arg)
-				}
-				return
-			}
-
-			if err != nil {
-				t.Errorf("ParseOlderThan(%q) unexpected error: %v", tt.arg, err)
-				return
-			}
-
-			if got != tt.want {
-				t.Errorf("ParseOlderThan(%q) = %d, want %d", tt.arg, got, tt.want)
-			}
-		})
-	}
-}
-
 // Test Manager_Sync with missing agent
 func TestManager_Sync_MissingAgent(t *testing.T) {
 	if testing.Short() {
@@ -443,7 +405,7 @@ func TestManager_Sync_MissingAgent(t *testing.T) {
 	tempDir, projectPath := setupTestRepoForAgent(t)
 	defer os.RemoveAll(tempDir)
 
-	mgr := NewAgentManager(projectPath)
+	mgr := NewManager(projectPath)
 
 	// Try to sync non-existent agent
 	_, err := mgr.Sync(SyncOptions{AgentName: "nonexistent"})
@@ -457,7 +419,7 @@ func TestManager_Sync_EmptyAgentName(t *testing.T) {
 	tempDir, projectPath := setupTestRepoForAgent(t)
 	defer os.RemoveAll(tempDir)
 
-	mgr := NewAgentManager(projectPath)
+	mgr := NewManager(projectPath)
 
 	// Try to sync with empty agent name
 	_, err := mgr.Sync(SyncOptions{AgentName: ""})
@@ -475,7 +437,7 @@ func TestManager_Sync_WithAutoRebase(t *testing.T) {
 	tempDir, projectPath := setupTestRepoForAgent(t)
 	defer os.RemoveAll(tempDir)
 
-	mgr := NewAgentManager(projectPath)
+	mgr := NewManager(projectPath)
 
 	// Create an agent first
 	err := mgr.Create(CreateOptions{
@@ -502,96 +464,6 @@ func TestManager_Sync_WithAutoRebase(t *testing.T) {
 }
 
 // Test Manager_Prune with empty agents list
-func TestManager_Prune_NoAgents(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping git operation test in short mode")
-	}
-
-	tempDir, projectPath := setupTestRepoForAgent(t)
-	defer os.RemoveAll(tempDir)
-
-	mgr := NewAgentManager(projectPath)
-
-	// Prune with no agents
-	result, err := mgr.Prune(PruneOptions{})
-	if err != nil {
-		t.Fatalf("Prune() failed: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("Prune() returned nil result")
-	}
-
-	if len(result.StaleAgents) != 0 {
-		t.Errorf("StaleAgents = %v, want empty", result.StaleAgents)
-	}
-}
-
-// Test Manager_Prune with dry-run flag
-func TestManager_Prune_DryRun(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping git operation test in short mode")
-	}
-
-	tempDir, projectPath := setupTestRepoForAgent(t)
-	defer os.RemoveAll(tempDir)
-
-	mgr := NewAgentManager(projectPath)
-
-	// Create an agent
-	err := mgr.Create(CreateOptions{
-		AgentName:  "prune-test",
-		BaseBranch: "main",
-	})
-	if err != nil {
-		t.Fatalf("Create() failed: %v", err)
-	}
-
-	// Prune with dry-run and small age threshold
-	result, err := mgr.Prune(PruneOptions{
-		DryRun:        true,
-		OlderThanDays: 0,
-	})
-	if err != nil {
-		t.Fatalf("Prune() failed: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("Prune() returned nil result")
-	}
-
-	// In dry-run, nothing should be removed
-	if len(result.Removed) > 0 {
-		t.Errorf("Removed = %v (dry-run should remove nothing)", result.Removed)
-	}
-}
-
-// Test Manager_Prune with default OlderThanDays
-func TestManager_Prune_DefaultAge(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping git operation test in short mode")
-	}
-
-	tempDir, projectPath := setupTestRepoForAgent(t)
-	defer os.RemoveAll(tempDir)
-
-	mgr := NewAgentManager(projectPath)
-
-	// Prune with 0 days (should default to 7)
-	result, err := mgr.Prune(PruneOptions{
-		OlderThanDays: 0,
-		DryRun:        true,
-	})
-	if err != nil {
-		t.Fatalf("Prune() failed: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("Prune() returned nil result")
-	}
-}
-
-// Test Manager_Remove non-existent agent
 func TestManager_Remove_NonExistent(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping git operation test in short mode")
@@ -600,7 +472,7 @@ func TestManager_Remove_NonExistent(t *testing.T) {
 	tempDir, projectPath := setupTestRepoForAgent(t)
 	defer os.RemoveAll(tempDir)
 
-	mgr := NewAgentManager(projectPath)
+	mgr := NewManager(projectPath)
 
 	// Remove non-existent agent should fail
 	err := mgr.Remove(RemoveOptions{AgentName: "nonexistent"})
@@ -618,7 +490,7 @@ func TestManager_Remove_DeleteBranch(t *testing.T) {
 	tempDir, projectPath := setupTestRepoForAgent(t)
 	defer os.RemoveAll(tempDir)
 
-	mgr := NewAgentManager(projectPath)
+	mgr := NewManager(projectPath)
 
 	// Create an agent
 	err := mgr.Create(CreateOptions{
@@ -648,7 +520,7 @@ func TestManager_Sync_ResultStructure(t *testing.T) {
 	tempDir, projectPath := setupTestRepoForAgent(t)
 	defer os.RemoveAll(tempDir)
 
-	mgr := NewAgentManager(projectPath)
+	mgr := NewManager(projectPath)
 
 	// Create an agent
 	err := mgr.Create(CreateOptions{
@@ -675,38 +547,6 @@ func TestManager_Sync_ResultStructure(t *testing.T) {
 }
 
 // Test Prune result structure
-func TestManager_Prune_ResultStructure(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping git operation test in short mode")
-	}
-
-	tempDir, projectPath := setupTestRepoForAgent(t)
-	defer os.RemoveAll(tempDir)
-
-	mgr := NewAgentManager(projectPath)
-
-	result, err := mgr.Prune(PruneOptions{})
-	if err != nil {
-		t.Fatalf("Prune() failed: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("Prune() returned nil result")
-	}
-
-	// Verify result has required fields
-	if result.StaleAgents == nil {
-		t.Error("StaleAgents is nil")
-	}
-	if result.Removed == nil {
-		t.Error("Removed is nil")
-	}
-	if result.Errors == nil {
-		t.Error("Errors is nil")
-	}
-}
-
-// Test Manager_Remove with uncommitted changes
 func TestManager_Remove_WithUncommittedChanges(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping git operation test in short mode")

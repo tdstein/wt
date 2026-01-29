@@ -5,8 +5,9 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
+
+	"github.com/tdstein/wt/internal/worktree"
 )
 
 // Context keys
@@ -101,20 +102,7 @@ func confirmRemove(path string) bool {
 
 // findWtRoot searches for .bare directory in current or parent directories
 func findWtRoot() (string, error) {
-	currentDir, err := os.Getwd()
-	if err != nil {
-		return "", fmt.Errorf("failed to get current directory: %w", err)
-	}
-
-	for currentDir != "/" {
-		barePath := filepath.Join(currentDir, ".bare")
-		if info, err := os.Stat(barePath); err == nil && info.IsDir() {
-			return currentDir, nil
-		}
-		currentDir = filepath.Dir(currentDir)
-	}
-
-	return "", fmt.Errorf("not in a wt directory (no .bare/ found in parent directories)")
+	return worktree.FindRoot()
 }
 
 // Context helpers

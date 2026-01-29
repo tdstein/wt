@@ -8,9 +8,9 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/tdstein/wt/internal/agent"
-	"github.com/tdstein/wt/internal/conflict"
-	"github.com/tdstein/wt/internal/parse"
-	"github.com/tdstein/wt/internal/repo"
+	"github.com/tdstein/wt/internal/check"
+	"github.com/tdstein/wt/internal/prune"
+	"github.com/tdstein/wt/internal/worktree"
 )
 
 var version = "dev"
@@ -85,17 +85,17 @@ Examples:
 
 func runClone(cmd *cobra.Command, args []string) error {
 	// Check prerequisites
-	if err := conflict.CheckGitAvailable(); err != nil {
+	if err := check.CheckGitAvailable(); err != nil {
 		return err
 	}
 
 	repoURL := args[0]
-	if !parse.IsURL(repoURL) {
+	if !worktree.IsURL(repoURL) {
 		return fmt.Errorf("invalid repository URL: %s", repoURL)
 	}
 
 	// Parse arguments
-	result, err := parse.ParseArgs(args)
+	result, err := worktree.ParseArgs(args)
 	if err != nil {
 		return err
 	}
@@ -103,7 +103,7 @@ func runClone(cmd *cobra.Command, args []string) error {
 	logInfo("Target: %s", result.TargetPath)
 
 	// Create repository manager
-	mgr := repo.NewManager(result.TargetPath, result.RepoURL)
+	mgr := worktree.NewManager(result.TargetPath, result.RepoURL)
 
 	// Check if target exists
 	if mgr.TargetExists() {
@@ -158,14 +158,14 @@ Examples:
 
 func runInit(cmd *cobra.Command, args []string) error {
 	// Check prerequisites
-	if err := conflict.CheckGitAvailable(); err != nil {
+	if err := check.CheckGitAvailable(); err != nil {
 		return err
 	}
 
 	targetPath := args[0]
 
 	// Expand to absolute path
-	result, err := parse.ParseArgs([]string{targetPath})
+	result, err := worktree.ParseArgs([]string{targetPath})
 	if err != nil {
 		return err
 	}
@@ -173,7 +173,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	logInfo("Target: %s", result.TargetPath)
 
 	// Create repository manager
-	mgr := repo.NewManager(result.TargetPath, "")
+	mgr := worktree.NewManager(result.TargetPath, "")
 
 	// Check if target exists
 	if mgr.TargetExists() {
@@ -232,7 +232,7 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	mgr := agent.NewAgentManager(targetPath)
+	mgr := agent.NewManager(targetPath)
 	agentName := args[0]
 	baseBranch := "main"
 	if len(args) > 1 {
@@ -273,7 +273,7 @@ func newRemoveCmd() *cobra.Command {
 				return err
 			}
 
-			mgr := agent.NewAgentManager(targetPath)
+			mgr := agent.NewManager(targetPath)
 			opts := agent.RemoveOptions{
 				AgentName:    args[0],
 				DeleteBranch: deleteBranch,
@@ -308,7 +308,7 @@ func newListCmd() *cobra.Command {
 				return err
 			}
 
-			mgr := agent.NewAgentManager(targetPath)
+			mgr := agent.NewManager(targetPath)
 			agents, err := mgr.List()
 			if err != nil {
 				return err
@@ -351,7 +351,7 @@ func newStatusCmd() *cobra.Command {
 				return err
 			}
 
-			mgr := agent.NewAgentManager(targetPath)
+			mgr := agent.NewManager(targetPath)
 			status, err := mgr.GetStatus()
 			if err != nil {
 				return err
@@ -406,7 +406,7 @@ func newCheckCmd() *cobra.Command {
 				return err
 			}
 
-			mgr := agent.NewAgentManager(targetPath)
+			mgr := agent.NewManager(targetPath)
 			agentName := args[0]
 			logInfo("Checking agent: %s", agentName)
 
@@ -419,7 +419,7 @@ func newCheckCmd() *cobra.Command {
 			fmt.Println()
 			fmt.Printf("Agent: %s\n", agentName)
 			fmt.Printf("Uncommitted changes: %v\n", result.HasChanges)
-			fmt.Printf("Divergence: %s\n", conflict.FormatDivergence(result.Divergence))
+			fmt.Printf("Divergence: %s\n", check.FormatDivergence(result.Divergence))
 			fmt.Printf("Merge conflicts: %v\n", result.HasConflicts)
 
 			if result.HasConflicts && len(result.ConflictingFiles) > 0 {
@@ -459,7 +459,7 @@ func newSyncCmd() *cobra.Command {
 				return err
 			}
 
-			mgr := agent.NewAgentManager(targetPath)
+			mgr := agent.NewManager(targetPath)
 			opts := agent.SyncOptions{
 				AgentName:  args[0],
 				AutoRebase: autoRebase,
@@ -488,7 +488,7 @@ func newSyncCmd() *cobra.Command {
 				logWarn("Base branch has changes - run with --auto-rebase to rebase")
 			}
 
-			fmt.Printf("Divergence: %s\n", conflict.FormatDivergence(result.Divergence))
+			fmt.Printf("Divergence: %s\n", check.FormatDivergence(result.Divergence))
 			return nil
 		},
 	}
@@ -515,18 +515,18 @@ func newPruneCmd() *cobra.Command {
 				return err
 			}
 
-			mgr := agent.NewAgentManager(targetPath)
+			pruner := prune.NewPruner(targetPath)
 
 			days := 7
 			if olderThan != "" {
 				var err error
-				days, err = agent.ParseOlderThan(olderThan)
+				days, err = prune.ParseOlderThan(olderThan)
 				if err != nil {
 					return err
 				}
 			}
 
-			opts := agent.PruneOptions{
+			opts := prune.Options{
 				OlderThanDays: days,
 				DryRun:        dryRun,
 				Interactive:   interactive,
@@ -534,7 +534,7 @@ func newPruneCmd() *cobra.Command {
 
 			logInfo("Pruning stale agents (older than %d days)...", days)
 
-			result, err := mgr.Prune(opts)
+			result, err := pruner.Prune(opts)
 			if err != nil {
 				return err
 			}
@@ -600,7 +600,7 @@ Examples:
 				return err
 			}
 
-			mgr := agent.NewAgentManager(targetPath)
+			mgr := agent.NewManager(targetPath)
 			agentName := args[0]
 
 			// Check if agent exists
@@ -609,7 +609,7 @@ Examples:
 				return err
 			}
 
-			var agentInfo *agent.AgentInfo
+			var agentInfo *agent.Info
 			for _, a := range agents {
 				if a.Agent == agentName {
 					agentInfo = &a

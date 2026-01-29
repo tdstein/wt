@@ -1,4 +1,4 @@
-package conflict
+package check
 
 import (
 	"os"
@@ -226,83 +226,6 @@ func TestChecker_Check(t *testing.T) {
 
 	if result.HasConflicts {
 		t.Error("Check() HasConflicts = true, want false for non-conflicting changes")
-	}
-}
-
-func TestChecker_Sync_AlreadyUpToDate(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping git operation test in short mode")
-	}
-
-	checker, tempDir, repoPath := setupTestRepo(t)
-	defer cleanupTestRepo(t, tempDir)
-
-	// Get main branch name
-	mainBranch := "main"
-	if _, err := git.New("rev-parse", "--verify", "main").WithDir(repoPath).Run(); err != nil {
-		mainBranch = "master"
-	}
-
-	// Create feature worktree inside repoPath
-	worktreePath := filepath.Join(repoPath, "feature-wt")
-	if err := git.WorktreeAdd(repoPath, worktreePath, "feature", true); err != nil {
-		t.Fatalf("Failed to create worktree: %v", err)
-	}
-
-	// Sync should report already up to date
-	result, err := checker.Sync("feature-wt", mainBranch, SyncOptions{})
-	if err != nil {
-		t.Fatalf("Sync() failed: %v", err)
-	}
-
-	if !result.AlreadyUpToDate {
-		t.Error("Sync() AlreadyUpToDate = false, want true when branches are in sync")
-	}
-}
-
-func TestChecker_Sync_WithUncommittedChanges(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping git operation test in short mode")
-	}
-
-	checker, tempDir, repoPath := setupTestRepo(t)
-	defer cleanupTestRepo(t, tempDir)
-
-	// Get main branch name
-	mainBranch := "main"
-	if _, err := git.New("rev-parse", "--verify", "main").WithDir(repoPath).Run(); err != nil {
-		mainBranch = "master"
-	}
-
-	// Create commits on main to make feature behind
-	if err := git.Commit(repoPath, "Main commit 1", true); err != nil {
-		t.Fatalf("Failed to create main commit: %v", err)
-	}
-
-	// Create feature worktree inside repoPath
-	if err := git.New("checkout", "-b", "feature", "HEAD~1").WithDir(repoPath).RunSilent(); err != nil {
-		t.Fatalf("Failed to create feature branch: %v", err)
-	}
-
-	worktreePath := filepath.Join(repoPath, "feature-wt")
-	if err := git.WorktreeAdd(repoPath, worktreePath, "feature-branch", true); err != nil {
-		t.Fatalf("Failed to create worktree: %v", err)
-	}
-
-	// Create uncommitted changes
-	testFile := filepath.Join(worktreePath, "uncommitted.txt")
-	if err := os.WriteFile(testFile, []byte("uncommitted"), 0644); err != nil {
-		t.Fatalf("Failed to create test file: %v", err)
-	}
-
-	// Sync should fail with uncommitted changes
-	result, err := checker.Sync("feature-wt", mainBranch, SyncOptions{AutoRebase: true})
-	if err != nil {
-		t.Fatalf("Sync() returned error: %v", err)
-	}
-
-	if result.Error == nil {
-		t.Error("Sync() Error = nil, want error when uncommitted changes exist")
 	}
 }
 
