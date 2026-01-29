@@ -3,6 +3,7 @@ package agent
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/tdstein/wt/internal/git"
@@ -702,6 +703,129 @@ func TestManager_Prune_ResultStructure(t *testing.T) {
 	}
 	if result.Errors == nil {
 		t.Error("Errors is nil")
+	}
+}
+
+// Test Manager_Remove with uncommitted changes
+func TestManager_Remove_WithUncommittedChanges(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping git operation test in short mode")
+	}
+
+	mgr, tempDir, projectPath := setupTestAgentManager(t)
+	defer cleanupTestAgentManager(t, tempDir)
+
+	// Create an agent
+	err := mgr.Create(CreateOptions{
+		AgentName:  "dirty-agent",
+		BaseBranch: "main",
+	})
+	if err != nil {
+		t.Fatalf("Create() failed: %v", err)
+	}
+
+	// Create an uncommitted change in the worktree
+	worktreePath := filepath.Join(projectPath, "dirty-agent")
+	testFile := filepath.Join(worktreePath, "test.txt")
+	if err := os.WriteFile(testFile, []byte("uncommitted change"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	// Remove should fail due to uncommitted changes
+	err = mgr.Remove(RemoveOptions{AgentName: "dirty-agent"})
+	if err == nil {
+		t.Error("Remove() should fail with uncommitted changes")
+	}
+	if err != nil && !strings.Contains(err.Error(), "uncommitted changes") {
+		t.Errorf("Remove() error should mention uncommitted changes, got: %v", err)
+	}
+}
+
+// Test Manager_Remove with unmerged commits
+func TestManager_Remove_WithUnmergedCommits(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping git operation test in short mode")
+	}
+
+	mgr, tempDir, projectPath := setupTestAgentManager(t)
+	defer cleanupTestAgentManager(t, tempDir)
+
+	// Create an agent
+	err := mgr.Create(CreateOptions{
+		AgentName:  "unmerged-agent",
+		BaseBranch: "main",
+	})
+	if err != nil {
+		t.Fatalf("Create() failed: %v", err)
+	}
+
+	// Create a commit in the agent worktree
+	worktreePath := filepath.Join(projectPath, "unmerged-agent")
+	testFile := filepath.Join(worktreePath, "new-file.txt")
+	if err := os.WriteFile(testFile, []byte("new content"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	// Stage and commit the file
+	if err := git.New("add", "new-file.txt").WithDir(worktreePath).RunSilent(); err != nil {
+		t.Fatalf("Failed to stage file: %v", err)
+	}
+	if err := git.Commit(worktreePath, "Add new file", false); err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
+
+	// Remove should fail due to unmerged commits
+	err = mgr.Remove(RemoveOptions{AgentName: "unmerged-agent"})
+	if err == nil {
+		t.Error("Remove() should fail with unmerged commits")
+	}
+	if err != nil && !strings.Contains(err.Error(), "unmerged commit") {
+		t.Errorf("Remove() error should mention unmerged commits, got: %v", err)
+	}
+}
+
+// Test Manager_Remove with clean merged worktree
+func TestManager_Remove_CleanMerged(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping git operation test in short mode")
+	}
+
+	mgr, tempDir, projectPath := setupTestAgentManager(t)
+	defer cleanupTestAgentManager(t, tempDir)
+
+	// Create an agent
+	err := mgr.Create(CreateOptions{
+		AgentName:  "clean-agent",
+		BaseBranch: "main",
+	})
+	if err != nil {
+		t.Fatalf("Create() failed: %v", err)
+	}
+
+	// Create and commit a change
+	worktreePath := filepath.Join(projectPath, "clean-agent")
+	testFile := filepath.Join(worktreePath, "merged.txt")
+	if err := os.WriteFile(testFile, []byte("content"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	if err := git.New("add", "merged.txt").WithDir(worktreePath).RunSilent(); err != nil {
+		t.Fatalf("Failed to stage file: %v", err)
+	}
+	if err := git.Commit(worktreePath, "Add file", false); err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
+
+	// Merge the branch into main
+	mainPath := filepath.Join(projectPath, "main")
+	if err := git.New("merge", "--no-ff", "clean-agent").WithDir(mainPath).RunSilent(); err != nil {
+		t.Fatalf("Failed to merge: %v", err)
+	}
+
+	// Now remove should succeed (clean and merged)
+	err = mgr.Remove(RemoveOptions{AgentName: "clean-agent"})
+	if err != nil {
+		t.Errorf("Remove() should succeed for clean merged worktree, got: %v", err)
 	}
 }
 

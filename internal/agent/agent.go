@@ -136,8 +136,38 @@ func (m *Manager) Remove(opts RemoveOptions) error {
 		branchName = branch
 	}
 
+	// Safety check: ensure no uncommitted changes
+	hasChanges, err := m.conflict.HasUncommittedChanges(worktreePath)
+	if err != nil {
+		return fmt.Errorf("failed to check for uncommitted changes: %w", err)
+	}
+	if hasChanges {
+		return fmt.Errorf("worktree has uncommitted changes, commit or stash before removing")
+	}
+
+	// Safety check: ensure all commits are merged into main
+	if branchName != "" {
+		baseBranch := "main"
+		if m.metadata.Exists(opts.AgentName) {
+			metadata, err := m.metadata.Get(opts.AgentName)
+			if err == nil && metadata.BaseBranch != "" {
+				baseBranch = metadata.BaseBranch
+			}
+		}
+
+		divergence, err := m.conflict.GetDivergence(baseBranch, branchName)
+		if err != nil {
+			return fmt.Errorf("failed to check branch divergence: %w", err)
+		}
+
+		if divergence.Ahead > 0 {
+			return fmt.Errorf("branch %s has %d unmerged commit(s), merge into %s before removing",
+				branchName, divergence.Ahead, baseBranch)
+		}
+	}
+
 	// Remove worktree
-	err := git.New("worktree", "remove", opts.AgentName).
+	err = git.New("worktree", "remove", opts.AgentName).
 		WithDir(m.targetPath).
 		RunSilent()
 	if err != nil {
