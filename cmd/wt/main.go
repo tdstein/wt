@@ -44,7 +44,7 @@ Manage agent worktrees:
   wt status                            Show agent dashboard
   wt switch <name>                     Switch to agent worktree
   wt check <name>                      Check for conflicts
-  wt sync <name>                       Sync with base branch
+  wt sync [name]                       Sync with base branch (defaults to current)
   wt prune [--older-than 7d]          Remove stale worktrees
 
 Claude Code integration:
@@ -457,22 +457,43 @@ func newSyncCmd() *cobra.Command {
 	var autoRebase bool
 
 	cmd := &cobra.Command{
-		Use:   "sync <name>",
+		Use:   "sync [name]",
 		Short: "Synchronize agent with base branch",
-		Args:  cobra.ExactArgs(1),
+		Long: `Synchronize an agent worktree with its base branch.
+
+If no agent name is provided, the current worktree is used.
+
+Examples:
+  wt sync              Sync current worktree
+  wt sync alice        Sync specific agent worktree`,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			targetPath, err := findWtRoot()
 			if err != nil {
 				return err
 			}
 
+			// Determine agent name
+			var agentName string
+			if len(args) > 0 {
+				agentName = args[0]
+			} else {
+				// Auto-detect from current worktree
+				detected, err := worktree.GetCurrentWorktree()
+				if err != nil {
+					return fmt.Errorf("no agent name provided and failed to detect current worktree: %w", err)
+				}
+				agentName = detected
+				logInfo("Using current worktree: %s", agentName)
+			}
+
 			mgr := agent.NewManager(targetPath)
 			opts := agent.SyncOptions{
-				AgentName:  args[0],
+				AgentName:  agentName,
 				AutoRebase: autoRebase,
 			}
 
-			logInfo("Syncing agent: %s", args[0])
+			logInfo("Syncing agent: %s", agentName)
 
 			result, err := mgr.Sync(opts)
 			if err != nil {
