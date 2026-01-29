@@ -23,6 +23,7 @@ claude
 ```
 
 The hooks automatically:
+
 - Create isolated worktrees for each session and subagent
 - Detect and prevent merge conflicts before they occur
 - Clean up stale worktrees safely
@@ -102,8 +103,8 @@ wt init my-project
 
 ## Directory Structure
 
-```
-~/wt/<project>/
+```text
+~/my-project/
 ├── .bare/                      # Shared git objects (bare repository)
 ├── .wt/                        # Application state directory
 │   └── metadata/               # Agent metadata JSON files
@@ -129,6 +130,7 @@ wt add bob main  # Optionally specify base branch
 ```
 
 Each agent worktree includes:
+
 - Independent working directory at `~/wt/my-project/<agent-name>/`
 - Dedicated branch named `<agent-name>`
 - JSON metadata tracked in `.wt/metadata/<agent>.json`
@@ -182,6 +184,7 @@ wt sync alice
 ```
 
 The sync command:
+
 - Detects if branch is behind base
 - Merges base branch into agent branch
 - Shows conflict status if any arise
