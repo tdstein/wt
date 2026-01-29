@@ -113,3 +113,8 @@ func Commit(dir, message string, allowEmpty bool) error {
 
 	return New(args...).WithDir(dir).RunSilent()
 }
+
+// SetUpstream sets the upstream branch for the current branch
+func SetUpstream(dir, branch, remote, remoteBranch string) error {
+	return New("branch", "--set-upstream-to="+remote+"/"+remoteBranch, branch).WithDir(dir).RunSilent()
+}
