@@ -118,3 +118,8 @@ func Commit(dir, message string, allowEmpty bool) error {
 func SetUpstream(dir, branch, remote, remoteBranch string) error {
 	return New("branch", "--set-upstream-to="+remote+"/"+remoteBranch, branch).WithDir(dir).RunSilent()
 }
+
+// Fetch fetches from a remote
+func Fetch(dir, remote string) error {
+	return New("fetch", remote).WithDir(dir).RunSilent()
+}

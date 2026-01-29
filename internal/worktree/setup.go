@@ -80,6 +80,11 @@ func (m *Manager) CloneRemoteBare() error {
 		return fmt.Errorf("failed to configure remote: %w", err)
 	}
 
+	// Fetch to populate remote tracking branches
+	if err := git.Fetch(m.barePath(), "origin"); err != nil {
+		return fmt.Errorf("failed to fetch remote branches: %w", err)
+	}
+
 	return nil
 }
 
