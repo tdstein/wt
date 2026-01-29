@@ -34,17 +34,22 @@ allowed-tools: Bash(wt *)
 
 ## When to Use This Skill
 
-### MANDATORY Usage
-You MUST use `wt` when:
-1. Working with any git repository (setup workspace first)
-2. Multiple agents need to work simultaneously (parallel workflows)
-3. Each distinct task requires isolation (prevent conflicts)
+### Recommended Usage
+Use `wt` to create isolated worktrees when:
+1. Working on complex, multi-file changes that require isolation
+2. Multiple agents need to work simultaneously without conflicts
+3. Long-horizon tasks that need dedicated workspace
+4. Planning or exploration work that modifies many files
 
-### Skill Integration
-Other skills MUST use `wt` as their foundation when working with repositories. The workflow is:
-1. Skill invoked → First action: set up `wt` workspace
-2. Do work in isolated worktree
-3. Report back to caller
+### Default Behavior
+- **Main sessions**: Work in current worktree (usually `main/`)
+- **Quick tasks**: Stay in current directory for speed and simplicity
+- **Complex tasks**: Create isolated worktrees explicitly with `wt add <name>`
+
+### Dynamic Base Branch
+- Worktrees automatically use your **current branch** as the base
+- If you're on `feature-x`, new worktrees branch from `feature-x` (not `main`)
+- This enables natural nested workflows and branch-relative development
 
 ## Repository Structure
 
@@ -98,17 +103,42 @@ cd my-project/main
 # Navigate to repository (any worktree)
 cd ~/wt/repo/main
 
-# Create agent workspace
+# Create agent workspace (uses current branch as base)
 wt add alice
 
 # Agent now has:
 # - Directory: ~/wt/repo/alice/
 # - Branch: alice
+# - Base: main (automatically detected from current branch)
 # - Metadata: ~/wt/repo/.wt/metadata/alice.json
 
 # Work in agent's space
 cd ~/wt/repo/alice
 # ... do work ...
+```
+
+### Create Worktree from Feature Branch
+```bash
+# When working on a feature branch
+cd ~/wt/repo/main
+git checkout feature-x
+
+# Create worktree - automatically uses feature-x as base
+wt add sub-task
+
+# Result:
+# - Base branch: feature-x (not main!)
+# - New work branches from your current context
+```
+
+### Explicit Base Branch
+```bash
+# Override automatic detection with explicit base
+wt add alice develop
+
+# Result:
+# - Base branch: develop (explicitly specified)
+# - Ignores current branch
 ```
 
 ### Check for Conflicts (Before Merging)
@@ -192,29 +222,45 @@ wt switch alice --path
 
 ## Integration Patterns
 
-### Pattern 1: Skill Initialization
+### Pattern 1: Quick Tasks (Default)
 ```bash
-# Every repository-based skill should start with:
+# Most tasks work in current directory without creating worktrees
 
-# 1. Check if already in a wt workspace
+# 1. Check if in a wt workspace
 if [ ! -d ".bare" ]; then
-  # 2. Set up workspace (clone or init)
   wt clone <repo-url> || wt init .
   cd main
 fi
 
-# 3. Create agent worktree
-AGENT_NAME="agent-$(date +%s)"
+# 2. Do work directly in current worktree
+# ... make changes ...
+
+# 3. Commit and report completion
+# No worktree creation needed for simple tasks
+```
+
+### Pattern 2: Complex Tasks (Explicit Isolation)
+```bash
+# For complex/long-horizon work, create isolated worktrees explicitly
+
+# 1. Create dedicated worktree
+AGENT_NAME="task-$(date +%s)"
 wt add "$AGENT_NAME"
 cd "../$AGENT_NAME"
 
-# 4. Do work in isolated space
-# ...
+# 2. Do complex work in isolation
+# ... multi-file changes ...
 
-# 5. Report completion
+# 3. Check for conflicts
+wt check "$AGENT_NAME"
+
+# 4. Merge when ready
+cd ../main
+git merge "$AGENT_NAME" --no-ff
+wt remove "$AGENT_NAME"
 ```
 
-### Pattern 2: Parallel Execution
+### Pattern 5: Parallel Execution
 ```bash
 # Coordinator creates multiple agent worktrees:
 wt add alice
@@ -229,15 +275,42 @@ wt add charlie
 # No file conflicts, true parallelism
 ```
 
-### Pattern 3: Safe Merging
+### Pattern 3: Autonomous Coordination
 ```bash
-# Before merging agent's work:
-wt check alice  # Detect conflicts
+# Plan and Explore agents get automatic worktrees and merge-back
+# Example: User spawns Plan agent
+
+# 1. SubagentStart hook automatically:
+#    - Detects agent type (Plan)
+#    - Creates worktree with current branch as base
+#    - Agent works in isolation
+
+# 2. Agent does planning work in isolated worktree
+
+# 3. SubagentStop hook automatically:
+#    - Checks for conflicts
+#    - If clean: merges back to current branch
+#    - Removes worktree
+#    - All without user intervention
+
+# User sees: "✓ Auto-merged plan-<id> → main and cleaned up worktree"
+```
+
+### Pattern 4: Manual Merging (When Conflicts Exist)
+```bash
+# If conflicts detected, auto-merge is skipped:
+wt check alice  # Shows conflict details
 wt sync alice   # Get latest changes
 
-# If clean, merge agent's branch to main
-cd main
-git merge alice
+# Resolve conflicts manually
+cd alice/
+# ... fix conflicts ...
+git add .
+git commit -m "Resolve conflicts"
+
+# Merge when ready
+cd ../main
+git merge alice --no-ff
 
 # Clean up
 wt remove alice
@@ -251,11 +324,12 @@ wt remove alice
 - **Keep it simple**: Short, lowercase, hyphen-separated names
 
 ### Workflow Guidelines
-1. **Always start with setup**: Run `wt clone` or `wt init` before any work
-2. **One agent, one worktree**: Don't share worktrees between agents
-3. **Check before merge**: Always run `wt check` before merging work
-4. **Sync regularly**: Use `wt sync` to stay current with base branch
-5. **Clean up**: Remove worktrees when done (`wt remove` or `wt prune`)
+1. **Default to current worktree**: Work in your current directory for most tasks
+2. **Create worktrees selectively**: Only for complex, multi-file, or long-horizon work
+3. **Base branch is dynamic**: New worktrees branch from your current context, not always `main`
+4. **Plan/Explore auto-isolate**: These agents automatically get worktrees and merge back
+5. **Check before manual merge**: Run `wt check` before merging work manually
+6. **Clean up**: Remove worktrees when done (`wt remove` or `wt prune`)
 
 ### Performance Optimization
 - **Shared object storage**: `.bare/objects/` is shared efficiently

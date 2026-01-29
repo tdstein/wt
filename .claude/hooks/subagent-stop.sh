@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SubagentStop hook: Handle subagent completion and conflict detection
+# SubagentStop hook: Handle subagent completion with autonomous merge-back
 set -euo pipefail
 
 # Read hook input from stdin
@@ -57,18 +57,58 @@ EOF
     exit 0
 fi
 
-# No conflicts - provide success context
-cat <<EOF
+# No conflicts detected - proceed with auto-merge
+CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
+
+# Get agent branch name (same as worktree name)
+AGENT_BRANCH="$WORKTREE_NAME"
+
+# Attempt merge with --no-ff to preserve agent work as distinct commit
+MERGE_OUTPUT=$(git merge --no-ff "$AGENT_BRANCH" -m "Merge subagent work from ${WORKTREE_NAME}
+
+Co-Authored-By: Claude (${AGENT_TYPE} agent)" 2>&1 || true)
+
+# Check if merge succeeded
+if echo "$MERGE_OUTPUT" | grep -q "Already up to date"; then
+    # No changes to merge - clean up worktree
+    wt remove "$WORKTREE_NAME" 2>/dev/null || true
+    cat <<EOF
 {
   "hookSpecificOutput": {
     "hookEventName": "SubagentStop",
-    "additionalContext": "Subagent '${AGENT_TYPE}' completed successfully in worktree '${WORKTREE_NAME}'. No conflicts detected.
-
-To review changes: cd ${WORKTREE_NAME}/ && git diff main
-To merge changes: cd ${WORKTREE_NAME}/ && git checkout main && git merge ${WORKTREE_NAME}
-To clean up: wt remove ${WORKTREE_NAME}"
+    "additionalContext": "Subagent '${AGENT_TYPE}' completed. No changes to merge, cleaned up worktree '${WORKTREE_NAME}'."
   }
 }
 EOF
+elif git diff --quiet HEAD@{1} HEAD 2>/dev/null || [ ! -f .git/MERGE_HEAD ]; then
+    # Merge completed successfully
+    wt remove "$WORKTREE_NAME" 2>/dev/null || true
+    cat <<EOF
+{
+  "hookSpecificOutput": {
+    "hookEventName": "SubagentStop",
+    "additionalContext": "✓ Subagent '${AGENT_TYPE}' completed successfully.
+Auto-merged ${WORKTREE_NAME} → ${CURRENT_BRANCH} and cleaned up worktree.
+
+Merged changes are now in your current branch."
+  }
+}
+EOF
+else
+    # Merge failed - preserve worktree for manual resolution
+    cat <<EOF
+{
+  "hookSpecificOutput": {
+    "hookEventName": "SubagentStop",
+    "additionalContext": "⚠ Subagent '${AGENT_TYPE}' completed but auto-merge failed.
+Preserved worktree '${WORKTREE_NAME}' for manual merge.
+
+To merge manually:
+  git merge ${AGENT_BRANCH}
+  wt remove ${WORKTREE_NAME}"
+  }
+}
+EOF
+fi
 
 exit 0

@@ -255,9 +255,23 @@ func runAdd(cmd *cobra.Command, args []string) error {
 
 	mgr := agent.NewManager(targetPath)
 	agentName := args[0]
-	baseBranch := "main"
+
+	// Get explicit base branch if provided
+	var explicitBaseBranch string
 	if len(args) > 1 {
-		baseBranch = args[1]
+		explicitBaseBranch = args[1]
+	}
+
+	// Get current working directory for base branch detection
+	cwd, err := os.Getwd()
+	if err != nil {
+		cwd = targetPath
+	}
+
+	// Detect base branch with priority: explicit > current > remote > "main"
+	baseBranch, err := worktree.DetectBaseBranch(cwd, explicitBaseBranch)
+	if err != nil {
+		return fmt.Errorf("failed to detect base branch: %w", err)
 	}
 
 	opts := agent.CreateOptions{
@@ -265,13 +279,14 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		BaseBranch: baseBranch,
 	}
 
-	logInfo("Creating agent worktree: %s", agentName)
+	logInfo("Creating agent worktree: %s (base: %s)", agentName, baseBranch)
 	if err := mgr.Create(opts); err != nil {
 		return err
 	}
 
 	logSuccess("Agent worktree created: %s", agentName)
 	fmt.Printf("Branch: %s\n", agentName)
+	fmt.Printf("Base: %s\n", baseBranch)
 	fmt.Printf("Path: %s/%s\n", targetPath, agentName)
 	return nil
 }
