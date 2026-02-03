@@ -16,9 +16,10 @@ type Command struct {
 
 // CloneOptions specifies options for cloning a repository
 type CloneOptions struct {
-	Bare         bool   // Create a bare repository
-	Partial      bool   // Use partial clone (--filter=blob:none)
-	ShallowDepth int    // Clone depth (0 = full history)
+	Bare         bool // Create a bare repository
+	Partial      bool // Use partial clone (--filter=blob:none)
+	ShallowDepth int  // Clone depth (0 = full history)
+	SingleBranch bool // Clone only the default branch (faster for repos with many branches)
 }
 
 // New creates a new git command builder
@@ -117,6 +118,9 @@ func CloneWithOptions(url, dir string, opts CloneOptions) error {
 	if opts.ShallowDepth > 0 {
 		args = append(args, fmt.Sprintf("--depth=%d", opts.ShallowDepth))
 	}
+	if opts.SingleBranch {
+		args = append(args, "--single-branch")
+	}
 
 	// Add bare flag
 	if opts.Bare {
@@ -178,4 +182,11 @@ func SetUpstream(dir, branch, remote, remoteBranch string) error {
 // Fetch fetches from a remote with progress output
 func Fetch(dir, remote string) error {
 	return New("fetch", remote).WithDir(dir).RunWithProgress()
+}
+
+// FetchBranch fetches a single branch from a remote
+func FetchBranch(dir, remote, branch string) error {
+	// Fetch the specific branch into refs/remotes/origin/<branch>
+	refspec := fmt.Sprintf("+refs/heads/%s:refs/remotes/%s/%s", branch, remote, branch)
+	return New("fetch", remote, refspec).WithDir(dir).RunWithProgress()
 }

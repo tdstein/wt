@@ -14,6 +14,7 @@ import (
 type ManagerOptions struct {
 	Partial      bool // Use partial clone (--filter=blob:none)
 	ShallowDepth int  // Clone depth (0 = full history)
+	SingleBranch bool // Clone only the default branch (faster for repos with many branches)
 }
 
 // Manager handles repository operations
@@ -92,6 +93,7 @@ func (m *Manager) CloneRemoteBare() error {
 		Bare:         true,
 		Partial:      m.opts.Partial,
 		ShallowDepth: m.opts.ShallowDepth,
+		SingleBranch: m.opts.SingleBranch,
 	}
 
 	if err := git.CloneWithOptions(m.repoURL, m.barePath(), opts); err != nil {
@@ -103,10 +105,12 @@ func (m *Manager) CloneRemoteBare() error {
 		return fmt.Errorf("failed to configure remote: %w", err)
 	}
 
-	// Fetch to populate remote tracking branches
+	// Fetch to populate remote tracking branches (skip for single-branch clones)
 	// Note: This is needed to create refs/remotes/origin/* for branch tracking
-	if err := git.Fetch(m.barePath(), "origin"); err != nil {
-		return fmt.Errorf("failed to fetch remote branches: %w", err)
+	if !m.opts.SingleBranch {
+		if err := git.Fetch(m.barePath(), "origin"); err != nil {
+			return fmt.Errorf("failed to fetch remote branches: %w", err)
+		}
 	}
 
 	return nil
@@ -345,6 +349,13 @@ func (m *Manager) SetupRemote() error {
 	if err != nil {
 		// Fallback to "main" if we can't determine the default branch
 		defaultBranch = "main"
+	}
+
+	// For single-branch clones, fetch just the default branch to create remote tracking ref
+	if m.opts.SingleBranch {
+		if err := git.FetchBranch(m.barePath(), "origin", defaultBranch); err != nil {
+			return fmt.Errorf("failed to fetch default branch: %w", err)
+		}
 	}
 
 	if err := m.CreateRemoteWorktree(defaultBranch); err != nil {

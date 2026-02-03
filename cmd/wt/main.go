@@ -76,6 +76,7 @@ Claude Code integration:
 func newCloneCmd() *cobra.Command {
 	var partial bool
 	var shallowDepth int
+	var allBranches bool
 
 	cmd := &cobra.Command{
 		Use:   "clone <url> [target-dir]",
@@ -84,28 +85,33 @@ func newCloneCmd() *cobra.Command {
 
 If target-dir is not specified, it will be derived from the repository URL.
 
+By default, only the default branch is cloned for speed. Use --all-branches to fetch all remote branches.
+
 Optimization flags:
   --partial        Use partial clone (blob:none filter) - 90-95% smaller for large repos
   --depth N        Shallow clone - fetch only N commits of history
+  --all-branches   Fetch all remote branches (slower, but needed for multi-branch workflows)
 
 Examples:
   wt clone https://github.com/user/repo
   wt clone https://github.com/user/repo ./my-project
   wt clone --partial https://github.com/torvalds/linux        # Large repo optimization
-  wt clone --depth 1 https://github.com/user/repo             # Latest commit only`,
+  wt clone --depth 1 https://github.com/user/repo             # Latest commit only
+  wt clone --all-branches https://github.com/org/repo         # Fetch all remote branches`,
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runClone(cmd, args, partial, shallowDepth)
+			return runClone(cmd, args, partial, shallowDepth, allBranches)
 		},
 	}
 
 	cmd.Flags().BoolVar(&partial, "partial", false, "Use partial clone (filters out blobs until needed)")
 	cmd.Flags().IntVar(&shallowDepth, "depth", 0, "Shallow clone depth (0 = full history)")
+	cmd.Flags().BoolVar(&allBranches, "all-branches", false, "Fetch all remote branches (default: only default branch)")
 
 	return cmd
 }
 
-func runClone(_ *cobra.Command, args []string, partial bool, shallowDepth int) error {
+func runClone(_ *cobra.Command, args []string, partial bool, shallowDepth int, allBranches bool) error {
 	// Check prerequisites
 	if err := check.CheckGitAvailable(); err != nil {
 		return err
@@ -125,9 +131,11 @@ func runClone(_ *cobra.Command, args []string, partial bool, shallowDepth int) e
 	logInfo("Target: %s", result.TargetPath)
 
 	// Create repository manager with clone options
+	// Default to single-branch for speed; --all-branches disables this
 	opts := worktree.ManagerOptions{
 		Partial:      partial,
 		ShallowDepth: shallowDepth,
+		SingleBranch: !allBranches,
 	}
 	mgr := worktree.NewManagerWithOptions(result.TargetPath, result.RepoURL, opts)
 
@@ -146,8 +154,8 @@ func runClone(_ *cobra.Command, args []string, partial bool, shallowDepth int) e
 		}
 	}
 
-	// Report optimization options
-	if partial || shallowDepth > 0 {
+	// Report optimization options (only show non-defaults)
+	if partial || shallowDepth > 0 || allBranches {
 		fmt.Println()
 		logInfo("Clone options:")
 		if partial {
@@ -155,6 +163,9 @@ func runClone(_ *cobra.Command, args []string, partial bool, shallowDepth int) e
 		}
 		if shallowDepth > 0 {
 			fmt.Printf("  - Shallow clone: %d commits\n", shallowDepth)
+		}
+		if allBranches {
+			fmt.Println("  - Fetching all remote branches")
 		}
 		fmt.Println()
 	}
