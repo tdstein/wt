@@ -74,6 +74,9 @@ Claude Code integration:
 // ============================================================================
 
 func newCloneCmd() *cobra.Command {
+	var partial bool
+	var shallowDepth int
+
 	cmd := &cobra.Command{
 		Use:   "clone <url> [target-dir]",
 		Short: "Clone a repository and set up worktree structure",
@@ -81,16 +84,28 @@ func newCloneCmd() *cobra.Command {
 
 If target-dir is not specified, it will be derived from the repository URL.
 
+Optimization flags:
+  --partial        Use partial clone (blob:none filter) - 90-95% smaller for large repos
+  --depth N        Shallow clone - fetch only N commits of history
+
 Examples:
   wt clone https://github.com/user/repo
-  wt clone https://github.com/user/repo ./my-project`,
+  wt clone https://github.com/user/repo ./my-project
+  wt clone --partial https://github.com/torvalds/linux        # Large repo optimization
+  wt clone --depth 1 https://github.com/user/repo             # Latest commit only`,
 		Args: cobra.RangeArgs(1, 2),
-		RunE: runClone,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runClone(cmd, args, partial, shallowDepth)
+		},
 	}
+
+	cmd.Flags().BoolVar(&partial, "partial", false, "Use partial clone (filters out blobs until needed)")
+	cmd.Flags().IntVar(&shallowDepth, "depth", 0, "Shallow clone depth (0 = full history)")
+
 	return cmd
 }
 
-func runClone(cmd *cobra.Command, args []string) error {
+func runClone(_ *cobra.Command, args []string, partial bool, shallowDepth int) error {
 	// Check prerequisites
 	if err := check.CheckGitAvailable(); err != nil {
 		return err
@@ -109,8 +124,12 @@ func runClone(cmd *cobra.Command, args []string) error {
 
 	logInfo("Target: %s", result.TargetPath)
 
-	// Create repository manager
-	mgr := worktree.NewManager(result.TargetPath, result.RepoURL)
+	// Create repository manager with clone options
+	opts := worktree.ManagerOptions{
+		Partial:      partial,
+		ShallowDepth: shallowDepth,
+	}
+	mgr := worktree.NewManagerWithOptions(result.TargetPath, result.RepoURL, opts)
 
 	// Check if target exists
 	if mgr.TargetExists() {
@@ -125,6 +144,19 @@ func runClone(cmd *cobra.Command, args []string) error {
 		if err := mgr.RemoveTarget(); err != nil {
 			return fmt.Errorf("failed to remove target: %w", err)
 		}
+	}
+
+	// Report optimization options
+	if partial || shallowDepth > 0 {
+		fmt.Println()
+		logInfo("Clone options:")
+		if partial {
+			fmt.Println("  - Partial clone enabled (blob:none filter)")
+		}
+		if shallowDepth > 0 {
+			fmt.Printf("  - Shallow clone: %d commits\n", shallowDepth)
+		}
+		fmt.Println()
 	}
 
 	// Clone from remote

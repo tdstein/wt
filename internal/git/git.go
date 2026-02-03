@@ -3,6 +3,7 @@ package git
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -11,6 +12,13 @@ import (
 type Command struct {
 	dir  string
 	args []string
+}
+
+// CloneOptions specifies options for cloning a repository
+type CloneOptions struct {
+	Bare         bool   // Create a bare repository
+	Partial      bool   // Use partial clone (--filter=blob:none)
+	ShallowDepth int    // Clone depth (0 = full history)
 }
 
 // New creates a new git command builder
@@ -50,6 +58,32 @@ func (c *Command) RunSilent() error {
 	return err
 }
 
+// RunWithProgress executes the git command, streaming stderr to os.Stderr for progress feedback
+func (c *Command) RunWithProgress() error {
+	cmd := exec.Command("git", c.args...)
+	if c.dir != "" {
+		cmd.Dir = c.dir
+	}
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+
+	// Always stream stderr to user (git progress goes here)
+	if stderr.Len() > 0 {
+		fmt.Fprint(os.Stderr, stderr.String())
+	}
+
+	if err != nil {
+		return fmt.Errorf("git %s failed: %w\nstderr: %s",
+			strings.Join(c.args, " "), err, stderr.String())
+	}
+
+	return nil
+}
+
 // Init runs git init --bare
 func Init(dir string, bare bool) error {
 	args := []string{"init"}
@@ -61,7 +95,7 @@ func Init(dir string, bare bool) error {
 	return New(args...).RunSilent()
 }
 
-// Clone runs git clone
+// Clone runs git clone with progress output
 func Clone(url, dir string, bare bool) error {
 	args := []string{"clone"}
 	if bare {
@@ -69,7 +103,29 @@ func Clone(url, dir string, bare bool) error {
 	}
 	args = append(args, url, dir)
 
-	return New(args...).RunSilent()
+	return New(args...).RunWithProgress()
+}
+
+// CloneWithOptions runs git clone with additional options
+func CloneWithOptions(url, dir string, opts CloneOptions) error {
+	args := []string{"clone"}
+
+	// Add optimization flags
+	if opts.Partial {
+		args = append(args, "--filter=blob:none")
+	}
+	if opts.ShallowDepth > 0 {
+		args = append(args, fmt.Sprintf("--depth=%d", opts.ShallowDepth))
+	}
+
+	// Add bare flag
+	if opts.Bare {
+		args = append(args, "--bare")
+	}
+
+	args = append(args, url, dir)
+
+	return New(args...).RunWithProgress()
 }
 
 // SymbolicRef sets a symbolic reference
@@ -119,7 +175,7 @@ func SetUpstream(dir, branch, remote, remoteBranch string) error {
 	return New("branch", "--set-upstream-to="+remote+"/"+remoteBranch, branch).WithDir(dir).RunSilent()
 }
 
-// Fetch fetches from a remote
+// Fetch fetches from a remote with progress output
 func Fetch(dir, remote string) error {
-	return New("fetch", remote).WithDir(dir).RunSilent()
+	return New("fetch", remote).WithDir(dir).RunWithProgress()
 }

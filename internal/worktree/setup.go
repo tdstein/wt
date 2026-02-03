@@ -10,10 +10,17 @@ import (
 	"github.com/tdstein/wt/internal/git"
 )
 
+// ManagerOptions specifies options for repository management
+type ManagerOptions struct {
+	Partial      bool // Use partial clone (--filter=blob:none)
+	ShallowDepth int  // Clone depth (0 = full history)
+}
+
 // Manager handles repository operations
 type Manager struct {
-	targetPath string // Path to the worktree root (e.g., ~/wt/my-project)
-	repoURL    string // Repository URL (empty for local projects)
+	targetPath string         // Path to the worktree root (e.g., ~/wt/my-project)
+	repoURL    string         // Repository URL (empty for local projects)
+	opts       ManagerOptions // Clone options
 }
 
 // NewManager creates a new repository manager
@@ -21,6 +28,16 @@ func NewManager(targetPath, repoURL string) *Manager {
 	return &Manager{
 		targetPath: targetPath,
 		repoURL:    repoURL,
+		opts:       ManagerOptions{},
+	}
+}
+
+// NewManagerWithOptions creates a new repository manager with clone options
+func NewManagerWithOptions(targetPath, repoURL string, opts ManagerOptions) *Manager {
+	return &Manager{
+		targetPath: targetPath,
+		repoURL:    repoURL,
+		opts:       opts,
 	}
 }
 
@@ -71,7 +88,13 @@ func (m *Manager) InitLocalBare() error {
 
 // CloneRemoteBare clones a bare repository from a remote URL
 func (m *Manager) CloneRemoteBare() error {
-	if err := git.Clone(m.repoURL, m.barePath(), true); err != nil {
+	opts := git.CloneOptions{
+		Bare:         true,
+		Partial:      m.opts.Partial,
+		ShallowDepth: m.opts.ShallowDepth,
+	}
+
+	if err := git.CloneWithOptions(m.repoURL, m.barePath(), opts); err != nil {
 		return fmt.Errorf("failed to clone repository: %w", err)
 	}
 
@@ -81,6 +104,7 @@ func (m *Manager) CloneRemoteBare() error {
 	}
 
 	// Fetch to populate remote tracking branches
+	// Note: This is needed to create refs/remotes/origin/* for branch tracking
 	if err := git.Fetch(m.barePath(), "origin"); err != nil {
 		return fmt.Errorf("failed to fetch remote branches: %w", err)
 	}
@@ -98,7 +122,99 @@ func (m *Manager) CreateGitPointer() error {
 }
 
 // GetRemoteDefaultBranch retrieves the default branch from the remote
+// Uses local refs first to avoid network calls, with fallback to git remote show
 func (m *Manager) GetRemoteDefaultBranch() (string, error) {
+	// Try 1: Parse local symbolic ref (fastest, no network)
+	branch, err := m.getRemoteDefaultBranchFromSymbolicRef()
+	if err == nil {
+		return branch, nil
+	}
+
+	// Try 2: Parse from local HEAD file
+	branch, err = m.getRemoteDefaultBranchFromFile()
+	if err == nil {
+		return branch, nil
+	}
+
+	// Try 3: Check for common branch names locally
+	branch, err = m.getRemoteDefaultBranchFromCommon()
+	if err == nil {
+		return branch, nil
+	}
+
+	// Fallback 4: Use git remote show (requires network call)
+	return m.getRemoteDefaultBranchFromRemoteShow()
+}
+
+// getRemoteDefaultBranchFromSymbolicRef reads refs/remotes/origin/HEAD symbolic ref
+func (m *Manager) getRemoteDefaultBranchFromSymbolicRef() (string, error) {
+	headPath := filepath.Join(m.barePath(), "refs", "remotes", "origin", "HEAD")
+	content, err := os.ReadFile(headPath)
+	if err != nil {
+		return "", fmt.Errorf("could not read symbolic ref: %w", err)
+	}
+
+	// File format: "ref: refs/remotes/origin/<branch-name>"
+	text := strings.TrimSpace(string(content))
+	if strings.HasPrefix(text, "ref: refs/remotes/origin/") {
+		branch := strings.TrimPrefix(text, "ref: refs/remotes/origin/")
+		if branch != "" {
+			return branch, nil
+		}
+	}
+
+	return "", fmt.Errorf("invalid symbolic ref format")
+}
+
+// getRemoteDefaultBranchFromFile reads from .bare/refs/remotes/origin/HEAD
+func (m *Manager) getRemoteDefaultBranchFromFile() (string, error) {
+	// This attempts alternative file locations
+	alternativePaths := []string{
+		filepath.Join(m.barePath(), "packed-refs"),
+	}
+
+	for _, path := range alternativePaths {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+
+		// Look for "refs/remotes/origin/HEAD"
+		for _, line := range strings.Split(string(content), "\n") {
+			if strings.Contains(line, "refs/remotes/origin/HEAD") {
+				parts := strings.Fields(line)
+				if len(parts) >= 2 {
+					ref := parts[len(parts)-1]
+					if strings.HasPrefix(ref, "refs/remotes/origin/") {
+						branch := strings.TrimPrefix(ref, "refs/remotes/origin/")
+						if branch != "" {
+							return branch, nil
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return "", fmt.Errorf("HEAD ref not found in files")
+}
+
+// getRemoteDefaultBranchFromCommon checks for common branch names (main, master, develop)
+func (m *Manager) getRemoteDefaultBranchFromCommon() (string, error) {
+	commonBranches := []string{"main", "master", "develop", "development"}
+
+	for _, branch := range commonBranches {
+		refPath := filepath.Join(m.barePath(), "refs", "remotes", "origin", branch)
+		if _, err := os.Stat(refPath); err == nil {
+			return branch, nil
+		}
+	}
+
+	return "", fmt.Errorf("no common branch names found")
+}
+
+// getRemoteDefaultBranchFromRemoteShow uses git remote show (network call)
+func (m *Manager) getRemoteDefaultBranchFromRemoteShow() (string, error) {
 	output, err := git.RemoteShow(m.barePath(), "origin")
 	if err != nil {
 		return "", fmt.Errorf("failed to get remote info: %w", err)
